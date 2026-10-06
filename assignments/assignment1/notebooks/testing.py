@@ -126,7 +126,32 @@ for i in range(runs):
         sensed_tip_list.append(sensed)
         
     
-    def compute_pivot_calibration(F_ptr_list, F_cal_list):
+    sensed_positions = []
+    valid_F_ptr_list = []
+    valid_F_cal_list = []
+
+    for index, sensed in enumerate(sensed_tip_list):
+        #No variable taken
+        if sensed is None:
+            continue
+
+        position = sensed.vec.ravel()
+
+        # Error/Outside range
+        if np.array_equal(position, [-10000, -10000, -10000]):
+            continue
+
+        sensed_positions.append(position)
+        valid_F_ptr_list.append(F_ptr_list[index])
+        valid_F_cal_list.append(F_cal_list[index])
+
+    #Find the covariance and at least 2 valid observations
+    if len(sensed_positions) >= 2:
+        sensed_tip_cov = np.cov(
+            np.array(sensed_positions), rowvar=False, ddof=1
+        )
+    
+    def compute_pivot_calibration(F_ptr_list, F_cal_list, sensed_positions):
         """
         Using Least squares, estimate the pointer's local tip position. Using fit residuals, measure covariance. 
         
@@ -141,64 +166,41 @@ for i in range(runs):
                 (e.g. from the least-squares fit's residuals)
         """
         #Checks if the lists are the same length
-        if (len(F_ptr_list) != len(F_cal_list)):
+        if (len(F_ptr_list) != len(F_cal_list) and len(F_cal_list) != len(sensed_positions)):
             raise ValueError("Lists are not the same length")
         
         #Checks if they are at least 3 observations as 2 observations could just be in the same plane
         if (len(F_ptr_list) < 3):
             raise ValueError("Lists aren't long enough and need more observations")
         
-        A_total = []
-        b_total = []
-        
-        for index in range (len(F_ptr_list)):
-            #Declare rot and position
-            rotation_Ptr = F_ptr_list[index].R.matrix
-            rotation_Cal = F_cal_list[index].R.matrix
+        tip_positions = []
+        for index in range(len(sensed_positions)):
+            #Get the sensor reading
+            sensor_point = vct3(sensed_positions[index])
             
-            pos_Ptr = F_ptr_list[index].p.vec
-            pos_Cal = F_cal_list[index].p.vec
+            #Move the point to tracker coords.
+            tracker_point = F_cal_list[index] * sensor_point
             
-            #Equation -> F(ptr, j) * p(tip) = F(cal, j) * p(cal2tip) where p(sensed) = p(cal2tip) + delta p(j) where delta p(j) is the difference tip error or sensor error
-            #Simplified -> R(ptr, j) * p(tip) - R(cal, j) * p(cal2tip) = t(cal, j) - t(ptr, j)
-            # Therefore A(j) = [R(ptr, j), - R(cal, j)] & b(j) = t(cal, j) - t(ptr, j)
-            A_j = np.hstack((rotation_Ptr, -rotation_Cal))
-            b_j = (pos_Cal - pos_Ptr).ravel()
+            #Move to pointer coordinates
+            pointer_point = F_ptr_list[index].inv() * tracker_point
             
-            # Add them to the list
-            A_total.append(A_j)
-            b_total.append(b_j)
+            #Store the 3 coordinates
+            tip_positions.append(pointer_point.vec.ravel())
             
-        #Stack them/put them side by side
-        A_total = np.vstack(A_total)
-        b_total = np.concatenate(b_total)
+        #Average estimated tip position
+        p_tip = vct3(np.mean(tip_positions, axis=0))
         
-        #Make sure there are 6 columns
-        if np.linalg.matrix_rank(A_total) < 6:
-            raise ValueError("Not a unique calibration")
-        
-        #Finds least squares automatically
-        result, _, _, _ = np.linalg.lstsq(A_total, b_total, rcond=None)
-        
-        #Get this based on above where A(j) * x = b(j) where x = [p_tip, p_cal2tip]^T
-        p_tip = vct3(result[:3])
-        p_cal2tip = vct3(result[3:6])
-        
-        #A_total@results is predicted values vs b_total is actual values (gets difference/error)
-        res = b_total - np.sum(A_total * result, axis=1)
-        
-        #Gets noise invariance and subtrack six as fitted for 3 unknowns for each sure both p's
-        sigma_squared = np.sum(res ** 2) / (len(b_total) - 6)
-        
-        # TODO: ask at OH!!
-        # Cov(results) = signa^2 * (A^T*A)^-1
-        full_cov = sigma_squared * np.linalg.inv(A_total.T @ A_total)
-        
-        #Gets the top Left for p_tip alone and not for p_cal2tip
-        cov_estimate = full_cov[:3, :3]
+        #Cov estimated tip position
+        cov_estimate = (
+            np.cov(np.array(tip_positions), rowvar=False, ddof=1)/len(tip_positions)
+        )
         
         return p_tip, cov_estimate
-    p_tip_est, p_tip_cov = compute_pivot_calibration(F_ptr_list, F_cal_list)
+        
+        
+
+    p_tip_est, p_tip_cov = compute_pivot_calibration(valid_F_ptr_list, valid_F_cal_list, sensed_positions)
+
     
     near_local_positions = [
         vct3(80, 160, 160),
