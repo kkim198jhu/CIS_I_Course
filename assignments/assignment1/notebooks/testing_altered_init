@@ -18,7 +18,9 @@ for i in range(runs):
         vct3( 80,  80,  80),
         vct3( 80, -60, -80),
         vct3(-80,  65, -80),
-        vct3(-70, -80,  70)
+        vct3(-70, -80,  70),
+        vct3(5, -10, 100),
+        vct3(-10, 5, -95)
     ]
     ptr_tip_approx = vct3(0, 0, 50)  # TODO: vct3, the tip's approximate position in the pointer's local frame
     
@@ -28,7 +30,9 @@ for i in range(runs):
         vct3(-10, 35, -10),
         vct3(40, 40, 0),
         vct3(15, 10, 40),
-        vct3(10, -20, 5)
+        vct3(10, -20, 5),
+        vct3(5, -5, 45),
+        vct3(-5, 0, -42)
     ]
     
     F_tracker_approx = Frame(Rot(), vct3(1000, 1000, 2200))  # TODO: Frame, tracker pose relative to the workspace
@@ -290,10 +294,4 @@ print("Average median error (mm):", np.mean([np.median(e) for e in all_run_error
 print("Average 95th percentile (mm):", np.mean([np.percentile(e, 95) for e in all_run_errors]))
 print("Average RMSE (mm):", np.mean([np.sqrt(np.mean(e ** 2)) for e in all_run_errors]))
 print("Worst error across all runs (mm):",  max(np.max(e) for e in all_run_errors))
-print("Runs where all poses meet 2 mm:", sum(np.all(e <= 2) for e in all_run_errors), "/", runs)
-
-
-
-
-
-
+print("Runs where all poses meet 2 mm:", sum(np.all(e <= 2) for e in all_run_errors))
