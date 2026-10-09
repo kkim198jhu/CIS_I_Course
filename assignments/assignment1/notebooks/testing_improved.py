@@ -203,12 +203,13 @@ for i in range(runs):
 
     
     near_local_positions = [
-        vct3(80, 160, 160),
-        vct3(80, -160, -160),
-        vct3(-80, 160, -160),
-        vct3(-80, -160,  160)
+    vct3( 80,  320,  320),
+    vct3( 80, -320, -320),
+    vct3(-80,  320, -320),
+    vct3(-80, -320,  320)
     ]
     F_near_approx = Frame(Rot.xyz(0, 0, 0), vct3(650, 300, 300))
+
     near_mb = simulation.define_marker_body("near_mb", near_local_positions)
     near_placed = simulation.place_marker_body(near_mb, F_near_approx)
     refine_marker_body(trk, near_placed)
