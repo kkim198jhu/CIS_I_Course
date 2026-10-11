@@ -15,20 +15,20 @@ for i in range(runs):
         # TODO: at least 4 non-coplanar vct3 points, e.g. vct3(x, y, z)
         # optimizing tracker placement here, ideally want to maximize volume and disrupl symmery
         # TODO: math proff/paper as backing
-        vct3( 80,  80,  80),
-        vct3( 80, -60, -80),
-        vct3(-80,  65, -80),
-        vct3(-70, -80,  70)
+        vct3( 80,  80,  160),
+        vct3( 80, -60, 0),
+        vct3(-80,  65, 0),
+        vct3(-70, -80, 150)
     ]
-    ptr_tip_approx = vct3(0, 0, 50)  # TODO: vct3, the tip's approximate position in the pointer's local frame
+    ptr_tip_approx = vct3(0, 0, -50)  # TODO: vct3, the tip's approximate position in the pointer's local frame
     
     cal_local_positions = [
         # TODO: at least 4 non-coplanar vct3 points
         # same idea here, avoiding symmetry
-        vct3(-10, 35, -10),
-        vct3(40, 40, 0),
-        vct3(15, 10, 40),
-        vct3(10, -20, 5)
+        vct3(-40, 35, -50),
+        vct3(40, 40, -40),
+        vct3(45, 40, 0),
+        vct3(10, -20, -35)
     ]
     
     F_tracker_approx = Frame(Rot(), vct3(1000, 1000, 2200))  # TODO: Frame, tracker pose relative to the workspace
@@ -47,7 +47,7 @@ for i in range(runs):
     ptr = simulation.define_pointer("ptr1", ptr_tip_approx, ptr_mb)
     trk = simulation.create_tracker("trk1", F_tracker_approx)
     
-    def refine_marker_body(trk, placed, n_readings=100, passes=1):
+    def refine_marker_body(trk, placed, n_readings=100, passes=3):
         """
         Improve the estimated positions of a body's markers by averaging repeated tracker readings in the body's local coordinate frame
         
@@ -203,12 +203,12 @@ for i in range(runs):
 
     
     near_local_positions = [
-    vct3( 80,  320,  320),
-    vct3( 80, -320, -320),
-    vct3(-80,  320, -320),
-    vct3(-80, -320,  320)
+        vct3( 80,  310,  320),
+        vct3( 80, -320, -315),
+        vct3(-75,  320, -320),
+        vct3(-80, -315,  320)
     ]
-    F_near_approx = Frame(Rot.xyz(0, 0, 0), vct3(650, 300, 300))
+    F_near_approx = Frame(Rot.xyz(0, 0, 0), vct3(650, 650, 300))
 
     near_mb = simulation.define_marker_body("near_mb", near_local_positions)
     near_placed = simulation.place_marker_body(near_mb, F_near_approx)
@@ -222,11 +222,11 @@ for i in range(runs):
     #Building a list from the thetas and offsets above
     test_poses = []
     for theta in thetas:
-        test_poses.append(Frame(Rot.xyz(theta, 0, 0), vct3(300, 300, 300)))
+        test_poses.append(Frame(Rot.xyz(theta, 0, 0), vct3(700, 700, 700)))
         for offset in offsets:
-            test_poses.append(Frame(Rot.xyz(0, theta, 0), vct3(300+offset, 300, 300)))
-            test_poses.append(Frame(Rot.xyz(0, 0, theta), vct3(300, 300+offset, 300)))
-            test_poses.append(Frame(Rot.xyz(theta, theta, theta), vct3(300, 300, 300+offset)))
+            test_poses.append(Frame(Rot.xyz(0, theta, 0), vct3(700+offset, 700, 700)))
+            test_poses.append(Frame(Rot.xyz(0, 0, theta), vct3(700, 700+offset, 700)))
+            test_poses.append(Frame(Rot.xyz(theta, theta, theta), vct3(700, 700, 700+offset)))
     #Add corners for better representation
     test_poses.append(Frame(Rot.xyz(0, 0, 0), vct3(100, 100, 100)))
     test_poses.append(Frame(Rot.xyz(0, 0, 0), vct3(500, 500, 500)))
