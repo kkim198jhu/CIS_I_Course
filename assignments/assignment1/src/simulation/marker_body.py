@@ -24,10 +24,12 @@ class PlacedBody:
     holds the visible, approximate (nominal) placement a student specified.
 
     Mutable on purpose: hand_guide_pointer() updates a pointer's
-    actual_placement in place every time the pointer is re-guided.
+    actual_placement in place every time the pointer is re-guided (and, in
+    assignment 2, the robot moves its calibration body the same way).
     """
     body: MarkerBody
     actual_placement: Frame
+    visible: bool = True  # False while a body is physically removed (e.g. a detached calibration body)
 
 
 def define_marker_body(name: str, nominal_positions: List[vct3]) -> MarkerBody:
@@ -37,7 +39,10 @@ def define_marker_body(name: str, nominal_positions: List[vct3]) -> MarkerBody:
     immediately assigns it the (hidden) manufacturing-noise covariance
     every real marker body has, so it's ready to be read by a tracker.
     """
-    body = MarkerBody(name, nominal_positions, world_frame=Frame.eye())
+    if len(nominal_positions) < 3:
+        raise ValueError(f"define_marker_body: {name!r} needs at least 3 markers, got {len(nominal_positions)} "
+                         "(did you fill in the design TODOs?)")
+    body = MarkerBody(name, list(nominal_positions), world_frame=Frame.eye())
     body.set_manufacturing_cov(Covariance.eye(3, scale=constants.MARKER_MANUFACTURING_STD ** 2))
     return body
 
@@ -56,13 +61,21 @@ def place_marker_body(body: MarkerBody, F_approx: Frame, precision: str = "coars
     ||alpha_cal||<=0.1, ||epsilon_cal||<=25mm bounds. precision="precise"
     models a robot precisely moving to a *commanded* pose (e.g. step 8's
     test poses, where "delta_Ft is relatively small") instead.
+    precision="exact" places the body with no error at all (assignment 2's
+    robot calibration body, whose placement is driven by the robot).
     """
+    if not isinstance(F_approx, Frame):
+        raise TypeError(f"place_marker_body: F_approx must be a Frame, got {F_approx!r} (did you fill in the design TODOs?)")
+
     if precision == "coarse":
         angle_std, pos_std = constants.BODY_PLACEMENT_ANGLE_STD, constants.BODY_PLACEMENT_POS_STD
     elif precision == "precise":
         angle_std, pos_std = constants.TEST_POSE_ANGLE_STD, constants.TEST_POSE_POS_STD
+    elif precision == "exact":
+        body.update_world_frame(F_approx)
+        return PlacedBody(body=body, actual_placement=F_approx)
     else:
-        raise ValueError(f"place_marker_body: precision must be 'coarse' or 'precise', got {precision!r}")
+        raise ValueError(f"place_marker_body: precision must be 'coarse', 'precise' or 'exact', got {precision!r}")
 
     body.update_world_frame(F_approx)
 
