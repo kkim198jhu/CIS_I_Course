@@ -1035,6 +1035,28 @@ class uFrame:
         """
         return uFrame(self._ut.as_left_convention())
 
+    # ── perturbation / sampling ──
+    def perturb(self, eta) -> Frame:
+        """
+        Applies a given pose perturbation eta = [alpha; epsilon] in this
+        frame's convention and returns the resulting (certain) Frame:
+        F_nom @ Exp(eta) [RIGHT] or Exp(eta) @ F_nom [LEFT].
+        """
+        from .se3 import exp_se3
+        dF = exp_se3(np.asarray(eta, dtype=np.float64).reshape(6))
+        if self.convention == Convention.RIGHT:
+            return Frame(self._ut.F_nom @ dF)
+        return Frame(dF @ self._ut.F_nom)
+
+    def sample(self) -> Frame:
+        """
+        Draws one random sample Frame from this uncertain frame's
+        distribution: eta ~ N(0, C), applied in this frame's convention
+        (see perturb; mirrors uRot.sample()).
+        """
+        eta = np.random.multivariate_normal(np.zeros(6), self._ut.C)
+        return self.perturb(eta)
+
     # ── multiplication ──
     def __mul__(self, other):
         if isinstance(other, uFrame):

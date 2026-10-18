@@ -10,7 +10,8 @@ class MarkerBody:
     def __init__(self, name, nominal_marker_positions: List[vct3], world_frame: Union[Frame, uFrame]):
         self.name = name
         self.nominal_marker_positions = nominal_marker_positions
-        self.observed_marker_positions = None  # populated by Tracker via tracker-error covariance
+        self.observed_marker_positions = None  # b_m,k (tracker frame) from the most recent SampleMarkerBodies
+        self.observed_frame = None             # F_m from the most recent SampleMarkerBodies
         # frames that need to be initialized
         self.world_frame = world_frame  # position of marker body wrt world frame
         self.actual_marker_positions = None
