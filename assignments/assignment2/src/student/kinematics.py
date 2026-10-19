@@ -282,26 +282,55 @@ class ImprovedKinematics(Robot):
         return np.concatenate(errors)
     def fit(self, data: CalibrationData, **kwargs):
         """
-        TODO: implement.
-        
+        TODO(DONE): implement.
         Minimize the sum of squared residuals
         
         Non-linear least squares over the parameters (scipy.optimize is
         allowed). Must set self.params. Return whatever diagnostics you want
         to report (final cost, iterations, ...).
         """
-        raise NotImplementedError("TODO: implement fit")
+        
+        result = least_squares(self.residuals, self.params, args=(data,), **kwargs)
+        self.params = result.x
+        return result
 
     def jacobian_rank_report(self, data: CalibrationData, params: Optional[np.ndarray] = None) -> dict:
         """
-        TODO: implement.
+        TODO (DONE): implement.
 
         Numerically differentiate residuals w.r.t. params and report the
         singular values (and which parameter directions are poorly
         determined). Use it to justify your parameterization and your
         choice of calibration poses in the report.
         """
-        raise NotImplementedError("TODO: implement jacobian_rank_report")
+        
+        #Gets some params as default is self.params
+        if (params is None):
+            params = self.params
+        
+        #Gets the residue vector and an empty matrix
+        res_vector = self.residuals(params, data)
+        mat = np.zeros((len(res_vector), len(params)))
+        
+        #Finds how each residual changes when one parameter changes
+        h = 10**-6
+        for i in range(len(params)):
+            c_param = params.copy()
+            c_param[i] += h
+            
+            mod_res_vector = self.residuals(c_param, data)
+            mat[:, i] = (mod_res_vector - res_vector) / h
+        
+        # SVD 
+        U, singular_values, Vt = np.linalg.svd(mat, full_matrices=False)
+        rank = np.linalg.matrix_rank(mat)
+        
+        return {
+            "rank": rank,
+            "n_parameters": len(params),
+            "singular_values": singular_values,
+            "parameter_directions": Vt
+        }
 
     # ------------------------------------------------------------------ reporting
 
@@ -317,4 +346,79 @@ class ImprovedKinematics(Robot):
         tool-frame offset. Note which of these are only defined up to the
         base-frame gauge (and so are better compared as angles between axes).
         """
-        raise NotImplementedError("TODO: implement parameters_report")
+        
+        
+        # Corrects how far each joint moves or rotates
+        #Makes sure we have params
+        params = self.params
+        
+        # Accounts for robot's tilted axes that are not perfectly aligned with x, y, and z.
+        #Each row contains 2 tilt values for 1 axis
+        tilts = params[6:16].reshape(5, 2)
+        
+        #Starts the corrected tilt_vectors, with axis 1 unchanged for both
+        tilt_vectors = [np.zeros(3)]
+        axes = [self.AXES[0]]
+        
+        #Gets the nominal axies from 2 - 6
+        for k in range(1, 6):
+            t1, t2 = tilts[k - 1]
+            
+            #Nominal x-axis
+            if k % 3 == 0:      
+                phi = np.array([0.0, t1, t2])
+                
+            # Nominal y-axis
+            elif k % 3 == 1:    
+                phi = np.array([t1, 0.0, t2])
+            
+            # Nominal z-axis
+            else:             
+                phi = np.array([t1, t2, 0.0])
+            
+            #Gets the nominal direction * rotation matrix from the rotation vector (exp_so3)
+            #Implements d*_k = R(phi_k) d_k from docstring above (in ImprovedKinematics doc string)
+            corrected_axis = vct3(exp_so3(phi) @ self.AXES[k].vec.ravel())
+            tilt_vectors.append(phi)
+            axes.append(corrected_axis)
+        
+        #Tilt_vectors finds how each nominal axis was rotated.
+        tilt_vectors = np.array(tilt_vectors)
+        #Unit_axes where each corrected joint axis points
+        unit_axes = np.array([axis.vec.ravel() for axis in axes])
+        
+        # Find the angle between axises using u dot v = cos(alpha), therefore alpha = arccos(u dot v)
+        axis_angles = np.zeros((6,6))
+        for i in range (6):
+            for j in range (6):
+                dot_product = np.dot(unit_axes[i], unit_axes[j])
+                dot_product_mod = np.clip(dot_product, -1, 1)
+                axis_angles[i, j] = np.arccos(dot_product_mod)
+        
+        coefficients = params[22:].reshape(6, self.n_poly)
+        # This finds whether a joint moves slightly more or less than commanded (1 is the original movement)
+        #calculates theta*_k = theta_k + delta_theta_k,sys(theta_k) (Look at ImprovedKinematics Docstring above)
+        #theta_k^corrected = theta_k + offsets_k + c_k,1 (theta_k / s_k) + c_k,2(theta_k / s_k) ^2
+        scales = np.maximum(np.abs(self.theta_min), np.abs(self.theta_max))
+        first_coeff = coefficients[:, 0]
+        coeff_normalized = first_coeff / scales + 1
+        
+        # Apply the formula from above where 
+        #F_ee = F_c * F_cw * F_w * F_we^(corrected)
+        # Frame(exp_se3(params[16:22])) = docstring above: xi_we -> twist of the tool frame, F_we = F_WE * Exp(xi_we)
+        tool_frame = Frame(exp_se3(params[16:22]))
+        
+        #Gets the translation and rotation
+        tool_trans = tool_frame.p.vec.ravel()
+        tool_rot = log_so3(tool_frame.R.matrix)
+        
+        #Returns the keys from docstring
+        return {
+            "axis_tilt_vectors": tilt_vectors,
+            "unit_axes": unit_axes,
+            "axis_angles_rad": axis_angles,
+            "joint_offsets": self.joint_offsets.copy(),
+            "joint_scale_factors": coeff_normalized,
+            "tool_translation_offset_mm": tool_trans,
+            "tool_rotation_offset_rad": tool_rot,
+        }
