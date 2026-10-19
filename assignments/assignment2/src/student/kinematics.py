@@ -7,7 +7,7 @@ from typing import Dict, Optional
 import numpy as np
 
 from data_types.nominal_types import vct3, Rot, Frame
-from uncertainty_networks.se3 import log_so3
+from uncertainty_networks.se3 import log_so3, exp_se3, exp_so3
 
 from ..robot import Robot
 from .workflow import CalibrationData
@@ -53,39 +53,136 @@ class ImprovedKinematics(Robot):
 
     def initial_params(self) -> np.ndarray:
         """
-        TODO: implement.
-
+        TODO (DONE): implement.
+        Creates the initial guesses for the corrections
+        
         output: the parameter vector that makes this model identical to the
                 nominal kinematics with base frame F_X_init -- with the
                 layout in the class docstring that is simply
                 np.zeros(6 + 10 + 6 + 6 * self.n_poly)
         """
-        raise NotImplementedError("TODO: implement initial_params")
+        
+        return np.zeros(6 + 10 + 6 + 6 * self.n_poly)
 
     def base_frame(self, params: Optional[np.ndarray] = None) -> Frame:
         """
-        TODO: implement.
-
+        TODO (DONE): implement.
+        Applies the first six correction parameters to the starting base-frame
+        
         output: F_X (robot base relative to the tracker) for params (default:
                 self.params) -- e.g. F_X_init * Exp(params[0:6]), see
                 uFrame.perturb / uncertainty_networks.se3.exp_se3
         """
-        raise NotImplementedError("TODO: implement base_frame")
+        
+        if params is None:
+            params = self.params
+        
+        f_X = self.F_X_init * Frame(exp_se3(params[0:6]))
+        return f_X
 
     # ------------------------------------------------------------------ kinematics
 
     def fwd_kins(self, theta, params: Optional[np.ndarray] = None) -> Frame:
         """
         ImprovedFwdKins(theta).
-
-        TODO: implement.
-
+        TODO (DONE): implement.
+        Predicts the end-effector pose
+        
         input: theta - 6 encoder joint values; params - defaults to self.params
         output: F_ee relative to the robot base frame, with the calibrated
                 error model (joint offsets + distortion, tilted axes, tool
                 frame offset) applied
         """
-        raise NotImplementedError("TODO: implement ImprovedKinematics.fwd_kins")
+        
+        # We need to consider that F_ee = F_c * F_cw * F_w * F_we^(corrected)
+        # F_c : Moving carriage -> robot base
+        # F_cw : Unrotated wrist frame -> carriage
+        # F_w : Rotated wrist frame -> unrotated wrist frame
+        # F_we^(corrected) : End effector → rotated wrist frame
+        
+        
+        # Corrects how far each joint moves or rotates
+        #Makes sure we have params
+        if params is None:
+            params = self.params
+        
+        #Gets the joint offsets
+        theta = np.asarray(theta, dtype=float).reshape(6)
+        theta_corrected = theta + self.joint_offsets
+        
+        coefficients = params[22:].reshape(6, self.n_poly)
+        
+        #calculates theta*_k = theta_k + delta_theta_k,sys(theta_k) (Look at ImprovedKinematics Docstring above)
+        #theta_k^corrected = theta_k + offsets_k + c_k,1 (theta_k / s_k) + c_k,2(theta_k / s_k) ^2
+        scales = np.maximum(np.abs(self.theta_min), np.abs(self.theta_max))
+        theta_normalized = theta / scales
+        
+        for k in range(6):
+            for j in range(self.n_poly):
+                theta_corrected[k] += (coefficients[k, j] * theta_normalized[k] ** (j + 1))
+        
+        
+        
+        # Accounts for robot's tilted axes that are not perfectly aligned with x, y, and z.
+        #Each row contains 2 tilt values for 1 axis
+        tilts = params[6:16].reshape(5, 2)
+        
+        #Starts the corrected axis list, so axis 1 is unchanged
+        axes = [self.AXES[0]]  
+        
+        #Gets the nominal axies from 2 - 6
+        for k in range(1, 6):
+            t1, t2 = tilts[k - 1]
+            
+            #Nominal x-axis
+            if k % 3 == 0:      
+                phi = np.array([0.0, t1, t2])
+                
+            # Nominal y-axis
+            elif k % 3 == 1:    
+                phi = np.array([t1, 0.0, t2])
+            
+            # Nominal z-axis
+            else:             
+                phi = np.array([t1, t2, 0.0])
+            
+            #Gets the nominal direction * rotation matrix from the rotation vector (exp_so3)
+            #Implements d*_k = R(phi_k) d_k from docstring above (in ImprovedKinematics doc string)
+            corrected_axis = vct3(exp_so3(phi) @ self.AXES[k].vec.ravel())
+            axes.append(corrected_axis)
+        
+        
+        
+        # Calculate translation produced by the first three joint
+        #Not all 6 joints as the first 3 joints only do translation and the next 3 do rotation
+        #Find this out at _actual_fwd_kins in Robot the class we inherited from
+        p_c = (
+            axes[0] * theta_corrected[0]
+            + axes[1] * theta_corrected[1]
+            + axes[2] * theta_corrected[2]
+        )
+        
+        #Gain the translation in a frame (F_c)
+        F_c = Frame(Rot.eye(), p_c)
+        
+        # Calculate rotations about the three corrected wrist axes
+        #Next 3 do rotation to get R_w = R_4 * R_5 * R_6.
+        R_w = Rot.eye()
+        for k in range(3, 6):
+            rotation = Rot(matrix=exp_so3(axes[k].vec.ravel() * theta_corrected[k]))
+            R_w = R_w * rotation
+        
+        #Wrist rotation has no translation of its own
+        F_w = Frame(R_w, vct3())
+        
+        
+        # Apply the formula from above where 
+        #F_ee = F_c * F_cw * F_w * F_we^(corrected)
+        # Frame(exp_se3(params[16:22])) = docstring above: xi_we -> twist of the tool frame, F_we = F_WE * Exp(xi_we)
+        F_we_corrected = self.F_WE * Frame(exp_se3(params[16:22]))
+
+        # End-effector pose relative to the robot base
+        return F_c * self.F_CW * F_w * F_we_corrected 
 
     def predict_in_tracker(self, theta, params: Optional[np.ndarray] = None) -> Frame:
         """The end-effector pose in the tracker frame: base_frame * fwd_kins."""
