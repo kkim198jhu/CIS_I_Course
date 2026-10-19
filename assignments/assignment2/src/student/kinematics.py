@@ -5,6 +5,7 @@ The calibrated kinematic model: ImprovedFwdKins / ImprovedInvKins.
 from typing import Dict, Optional
 
 import numpy as np
+from scipy.optimize import least_squares
 
 from data_types.nominal_types import vct3, Rot, Frame
 from uncertainty_networks.se3 import log_so3, exp_se3, exp_so3
@@ -283,6 +284,7 @@ class ImprovedKinematics(Robot):
         """
         TODO: implement.
         
+        Minimize the sum of squared residuals
         
         Non-linear least squares over the parameters (scipy.optimize is
         allowed). Must set self.params. Return whatever diagnostics you want
