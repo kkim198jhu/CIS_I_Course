@@ -98,7 +98,7 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
 def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
                              thetas: List[np.ndarray], repeats: int = 1) -> CalibrationData:
     """
-    # TODO: implement.
+    # TODO (DONE): implement.
 
     Visit each joint vector with rob.move_joints, read the calibration body
     with sample_marker_bodies and store its frame relative to the tracker.
