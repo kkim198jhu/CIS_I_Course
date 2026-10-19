@@ -37,7 +37,7 @@ def frame_error(F_a: Frame, F_b: Frame) -> Tuple[float, float]:
 
 def summarize_errors(errors: Sequence[Tuple[float, float]]) -> Dict[str, float]:
     """
-    TODO: implement.
+    TODO (DONE): implement.
     Calculate the number of observations, RMS errors, and maximum errors for orientation and position.
     
     input:

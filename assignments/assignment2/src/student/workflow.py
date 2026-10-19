@@ -15,6 +15,8 @@ from assignments.assignment1.src.tracker import Tracker
 from ..simulation import PlacedBody
 from .registration import average_frames
 
+from ..simulation.clock import clock
+from ..simulation.tracker import sample_marker_bodies
 
 @dataclass
 class CalibrationData:
@@ -35,7 +37,7 @@ class CalibrationData:
 
 def measure_home_offsets(rob: Robot, n_homings: int = 5) -> np.ndarray:
     """
-    TODO (DONE): implement.
+    #TODO (DONE): implement.
 
     HomeRobot() drives the robot to theta* = 0 and returns the encoder
     values there, i.e. -delta_theta_sys(home) - delta_theta_rnd. Repeat it
@@ -62,7 +64,7 @@ def measure_home_offsets(rob: Robot, n_homings: int = 5) -> np.ndarray:
 # this should contain a desired accuracy which will affect the number of calibration poses
 def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[vct3], desired_accuracy: float, **kwargs) -> List[np.ndarray]:
     """
-    TODO: implement -- this is a design task.
+    #TODO: implement -- this is a design task.
 
     Choose the joint vectors the robot will visit during calibration to reach the desired accuracy. Every
     parameter of your kinematic model must be excited by the data (axis
@@ -96,7 +98,7 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
 def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
                              thetas: List[np.ndarray], repeats: int = 1) -> CalibrationData:
     """
-    TODO: implement.
+    # TODO: implement.
 
     Visit each joint vector with rob.move_joints, read the calibration body
     with sample_marker_bodies and store its frame relative to the tracker.
@@ -111,12 +113,43 @@ def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
         repeats - readings per pose
     output: CalibrationData
     """
-    raise NotImplementedError("TODO: implement collect_calibration_data")
+    
+    #Error handling
+    if (repeats < 1):
+        raise ValueError("Repeats is 0 or below")
+    
+    # Starts the clock and initialize the data
+    data = CalibrationData()
+    t_start = clock.elapsed
+    
+    #Goes through all the theatas
+    for i in range (len(thetas)):
+        
+        # Moves the joints
+        rob.move_joints(thetas[i])
+        
+        #Track the observations through each repeat
+        for j in range(repeats):
+            # Gets the observations
+            observations = sample_marker_bodies(trk)
+            observed = observations[mbee_placed.body.name]
+            
+            # Makes sure that it's visible
+            if observed is None:
+                raise ValueError("Calibration body isn’t visible")
+            
+            # Add it to the data
+            data.thetas.append(thetas[i].copy())
+            data.frames.append(observed.frame)
+    
+    #Gets the clock elapsed overall
+    data.t_collect = clock.elapsed - t_start
+    return data
 
 
 def estimate_base_frame(data: CalibrationData, kins: Robot) -> Frame:
     """
-    TODO: implement.
+    #TODO (DONE): implement.
 
     With the calibration body's frame being exactly F_ee, every sample
     satisfies  F_ee,j = F_X * kins.fwd_kins(theta_j)  for one constant
@@ -130,6 +163,7 @@ def estimate_base_frame(data: CalibrationData, kins: Robot) -> Frame:
     output: F_X
     """
     
+    #Error handling
     if len(data.frames) != len(data.thetas) or len(data.frames) == 0:
         raise ValueError("Thetas and frames aren't equal lengths")
     
