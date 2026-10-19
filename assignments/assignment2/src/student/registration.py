@@ -79,7 +79,7 @@ def register_points(a: List[vct3], b: List[vct3]) -> Frame:
 
 def average_frames(frames: List[Frame]) -> Frame:
     """
-    TODO: implement.
+    TODO (DONE): implement.
 
     Average of several noisy estimates of the same Frame. Rotations cannot
     simply be averaged element-wise -- the result must be a proper

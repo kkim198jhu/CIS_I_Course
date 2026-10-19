@@ -34,7 +34,7 @@ class CalibrationData:
 
 def measure_home_offsets(rob: Robot, n_homings: int = 5) -> np.ndarray:
     """
-    TODO: implement.
+    TODO (DONE): implement.
 
     HomeRobot() drives the robot to theta* = 0 and returns the encoder
     values there, i.e. -delta_theta_sys(home) - delta_theta_rnd. Repeat it
@@ -46,7 +46,15 @@ def measure_home_offsets(rob: Robot, n_homings: int = 5) -> np.ndarray:
         n_homings - how many homings to average
     output: estimated delta_theta_sys at home, np.ndarray of 6
     """
-    raise NotImplementedError("TODO: implement measure_home_offsets")
+    
+    if (n_homings < 1):
+        raise ValueError("Not enough homings")
+    
+    readings = []
+    for i in range(n_homings):
+        readings.append(rob.home_robot())
+    
+    return -np.mean(readings, axis = 0)
 
 
 # this should contain a desired accuracy which will affect the number of calibration poses
