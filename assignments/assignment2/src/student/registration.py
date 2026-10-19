@@ -12,6 +12,7 @@ from data_types.nominal_types import vct3, Rot, Frame
 from assignments.assignment1.src.tracker import Tracker
 from ..simulation import PlacedBody
 
+from ..simulation.marker_body import (most_recent_observed_markers,update_marker_body,)
 
 def register_points(a: List[vct3], b: List[vct3]) -> Frame:
     """
@@ -118,14 +119,14 @@ def average_frames(frames: List[Frame]) -> Frame:
 
 def refine_marker_body(trk: Tracker, placed: PlacedBody, n_readings: int = 30) -> List[vct3]:
     """
-    TODO: implement.
+    TODO(DONE): implement.
 
     "It is possible to improve your estimate of a_m,k through a calibration
     process involving multiple observations of the marker body using the
     tracking camera and then averaging them."
 
     Take n_readings SampleMarkerBodies readings, use
-    most_recent_observed_markers(...) plus your register_points to bring
+    most_recent_observed_markers(... ) plus your register_points to bring
     each reading's b_m,k back into the body's own frame, average, and push
     the result into the body with update_marker_body(...). Note that each
     reading costs delta_t_samp of simulated time, and that the tracker
@@ -137,4 +138,39 @@ def refine_marker_body(trk: Tracker, placed: PlacedBody, n_readings: int = 30) -
         n_readings - number of readings to average
     output: the new List[vct3] of marker positions (also stored on the body)
     """
-    raise NotImplementedError("TODO: implement refine_marker_body")
+    
+    #error handling
+    if n_readings < 1:
+        raise ValueError("Not enough readings")
+    
+    all_readings = []
+    
+    #Look to assignment 1 refine_marker_bodies as we pretty much do the exact same thing
+    for j in range(n_readings):
+        #Gets the marker bodies
+        my_dict = simulation.sample_marker_bodies(trk)
+        obs = my_dict[placed.body.name]
+        
+        #Error Handling
+        if obs is None:
+            raise ValueError("Marker body is not visible")
+        
+        observed_markers = most_recent_observed_markers(placed.body)
+        frame = register_points(placed.body.nominal_marker_positions, observed_markers)
+        to_body = frame.inv()
+        
+        local_positions = []
+        for marker in observed_markers:
+            new_marker = to_body * marker
+            local_positions.append(new_marker.vec.ravel())
+            
+        all_readings.append(local_positions)
+        
+    #Gets the averages of all for refine like we did in assignment 1
+    averages = np.mean(all_readings, axis=0)
+    readings = []
+    for position in averages:
+        readings.append(vct3(position))
+        
+    update_marker_body(placed.body, readings)
+    return readings

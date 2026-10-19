@@ -336,7 +336,7 @@ class ImprovedKinematics(Robot):
 
     def parameters_report(self) -> Dict[str, np.ndarray]:
         """
-        TODO: implement.
+        TODO (DONE): implement.
 
         The handout (method 1 (e)) asks your program to report the updated
         kinematic parameters in physical terms, and your debugging runs to
