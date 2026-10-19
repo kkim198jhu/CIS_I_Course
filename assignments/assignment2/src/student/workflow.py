@@ -13,6 +13,7 @@ from data_types.nominal_types import vct3, Frame
 from ..robot import Robot
 from assignments.assignment1.src.tracker import Tracker
 from ..simulation import PlacedBody
+from .registration import average_frames
 
 
 @dataclass
@@ -54,6 +55,7 @@ def measure_home_offsets(rob: Robot, n_homings: int = 5) -> np.ndarray:
     for i in range(n_homings):
         readings.append(rob.home_robot())
     
+    # Encoder readings = negative of the systematic offsets plus noise
     return -np.mean(readings, axis = 0)
 
 
@@ -127,4 +129,17 @@ def estimate_base_frame(data: CalibrationData, kins: Robot) -> Frame:
             ImprovedKinematics)
     output: F_X
     """
-    raise NotImplementedError("TODO: implement estimate_base_frame")
+    
+    if len(data.frames) != len(data.thetas) or len(data.frames) == 0:
+        raise ValueError("Thetas and frames aren't equal lengths")
+    
+    base_frames = []
+    for j in range(len(data.thetas)):
+        #Finds where the robot -> tracker: Fx_j
+        # data.frames (F_ee,j) : end effector -> tracker
+        # kins.fwd_kins(data.thetas[j])^-1 : base -> end effector
+        # End effector is attachment at end of robot that tracks pose relative to robot base
+        Fx_j = data.frames[j] * kins.fwd_kins(data.thetas[j]).inv()
+        base_frames.append(Fx_j)
+    
+    return average_frames(base_frames)
