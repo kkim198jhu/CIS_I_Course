@@ -92,7 +92,43 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
         kwargs - whatever your design needs (grid sizes, margins, ...)
     output: ordered List of joint vectors (np.ndarray of 6)
     """
-    raise NotImplementedError("TODO: implement plan_calibration_poses")
+    
+    if (desired_accuracy <= 0):
+        raise ValueError("Desired_accuracy must be positive")
+    
+    poses = []
+    home = np.zeros(6)
+    n_samples = 20
+    
+    
+    for k in range(6):
+        #Gets a list of random values between the min and the max
+        sample_values = np.linspace(rob.theta_min[k], rob.theta_max[k], n_samples)
+        accepted = 0
+        
+        for value in sample_values:
+            #Creates a candidate joint configuration
+            theta = home.copy()
+            theta[k] = value
+            
+            #Gets the frame shift to the world frame
+            F_world = rob.F_rob * rob.fwd_kins(theta)
+            
+            #Gets the world positions from the marker body attached to the robot’s end effector
+            world_positions = []
+            for marker in mbee_local_positions:
+                world_positions.append(F_world * marker)
+                
+            if rob.within_limits(theta) and trk.is_visible(world_positions):
+                poses.append(theta.copy())
+                accepted += 1
+                
+        print(f"Joint {k + 1}: {accepted}/{n_samples} poses accepted")
+    #If there are no visible calibrations
+    if not poses:
+        raise ValueError("No visible calibration poses found")
+
+    return poses
 
 
 def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
