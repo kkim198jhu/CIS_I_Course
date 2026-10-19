@@ -86,20 +86,17 @@ class ImprovedKinematics(Robot):
         """
         ImprovedFwdKins(theta).
         TODO (DONE): implement.
-        Predicts the end-effector pose
-        
+        Predicts the end-effector pose with the formula F_ee = F_c * F_cw * F_w * F_we^(corrected)
+            F_c : Moving carriage -> robot base
+            F_cw : Unrotated wrist frame -> carriage
+            F_w : Rotated wrist frame -> unrotated wrist frame
+            F_we^(corrected) : End effector → rotated wrist frame
+            
         input: theta - 6 encoder joint values; params - defaults to self.params
         output: F_ee relative to the robot base frame, with the calibrated
                 error model (joint offsets + distortion, tilted axes, tool
                 frame offset) applied
         """
-        
-        # We need to consider that F_ee = F_c * F_cw * F_w * F_we^(corrected)
-        # F_c : Moving carriage -> robot base
-        # F_cw : Unrotated wrist frame -> carriage
-        # F_w : Rotated wrist frame -> unrotated wrist frame
-        # F_we^(corrected) : End effector → rotated wrist frame
-        
         
         # Corrects how far each joint moves or rotates
         #Makes sure we have params
@@ -247,19 +244,46 @@ class ImprovedKinematics(Robot):
 
     def residuals(self, params: np.ndarray, data: CalibrationData) -> np.ndarray:
         """
-        TODO: implement.
-
+        TODO (DONE): implement.
+        Tells the fitting algorithm how your current model is wrong
+        
         input: params - candidate parameter vector; data - CalibrationData
         output: flat residual vector comparing predict_in_tracker(theta_j,
                 params) with data.frames[j] for every sample (choose how to
                 weigh rotation vs translation)
         """
-        raise NotImplementedError("TODO: implement residuals")
-
+        
+        #Error handling
+        if len(data.frames) != len(data.thetas) or len(data.frames) == 0:
+            raise ValueError("Need nonempty, paired joint values and frames")
+        
+        errors = []
+        for j in range(len(data.thetas)):
+            #Gets the predicted values
+            predicted = self.predict_in_tracker(data.thetas[j], params)
+            
+            #Gets the observed values
+            observed = data.frames[j]
+            
+            #Does delta F = F^-1_predicted * F^observed (look at frame_error for formula)
+            dF = predicted.inv() * observed
+            
+            #Gets the errors and weights to them based on their target accuracy (in assignment 2)
+            rot_error = log_so3(dF.R.matrix)
+            trans_error = dF.p.vec.ravel()
+            
+            rot_error = rot_error/0.001
+            trans_error = trans_error/0.2
+            
+            error = np.concatenate((rot_error, trans_error))
+            errors.append(error)
+        
+        return np.concatenate(errors)
     def fit(self, data: CalibrationData, **kwargs):
         """
         TODO: implement.
-
+        
+        
         Non-linear least squares over the parameters (scipy.optimize is
         allowed). Must set self.params. Return whatever diagnostics you want
         to report (final cost, iterations, ...).
