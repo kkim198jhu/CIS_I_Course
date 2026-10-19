@@ -26,7 +26,55 @@ def register_points(a: List[vct3], b: List[vct3]) -> Frame:
         b - the same points observed in the target frame, same order
     output: Frame mapping a -> b
     """
-    raise NotImplementedError("TODO: implement register_points")
+    #Error Handling
+    if len(a) != len(b) or len(a) < 3:
+        raise ValueError("Nonvalid inputs for either a or b")
+    
+    # b_i = R * a_i + p
+    # Gets all the points for x, y, and z
+    A = np.array([point.vec.ravel() for point in a])
+    B = np.array([point.vec.ravel() for point in b])
+    
+    # Gets averages for all, so b_avg = R * a_avg + p 
+    a_centroid = np.mean(A, axis=0)
+    b_centroid = np.mean(B, axis=0)
+    
+    #Sets them to the origin, so don't worry about translations
+    #b_i - b_avg = (R * a_i + p) - (R * a_avg + p )
+    #b_i - b_avg = R (a_i - a_avg)
+    a_i_origin = A - a_centroid
+    b_i_origin = B - b_centroid
+    
+    #Error check to make sure colinear
+    rank_a = np.linalg.matrix_rank(a_i_origin)
+    rank_b = np.linalg.matrix_rank(b_i_origin)
+    if (rank_a == 0 or rank_b == 0):
+        raise ValueError("All points are the same point")
+    
+    if (rank_a == 1 or rank_b == 1):
+        raise ValueError("All points lie on a line")
+    
+    #Gets a 3x3 matrix for singular value decomp.
+    H = a_i_origin.T @ b_i_origin
+    
+    # H = U * sum(V)^t
+    U, singular_values, Vt = np.linalg.svd(H)
+    
+    #From that we get the rotation prediction, as R_pred * U = V, where U is source direction and V is matching target directions
+    R_prediction = Vt.T @ U.T
+    
+    # +1 is good proper rotation, while -1 is a reflection, so we need to flip it back
+    R_prediction_det = np.linalg.det(R_prediction)
+    if (R_prediction_det < 0):
+        Vt[-1, :] *= -1
+        R_prediction = Vt.T @ U.T
+    
+    # Gets the translation
+    p = b_centroid - R_prediction @ a_centroid
+    
+    F = Frame (Rot(matrix=R_prediction), vct3(p))
+    
+    return F
 
 
 def average_frames(frames: List[Frame]) -> Frame:
