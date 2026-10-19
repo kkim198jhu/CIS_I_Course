@@ -15,7 +15,7 @@ from ..simulation import PlacedBody
 
 def register_points(a: List[vct3], b: List[vct3]) -> Frame:
     """
-    TODO: implement (your own -- do not call the simulator's solver).
+    TODO (DONE): implement (your own -- do not call the simulator's solver).
 
     Rigid point-set registration: find the least-squares Frame F such that
     F * a[i] ~= b[i] for every corresponding pair. Think about what happens
@@ -89,7 +89,31 @@ def average_frames(frames: List[Frame]) -> Frame:
         frames - List[Frame], all estimates of the same transform
     output: the averaged Frame
     """
-    raise NotImplementedError("TODO: implement average_frames")
+    n = len(frames)
+    if (n == 0):
+        raise ValueError("List is empty.")
+    
+    rot = []
+    translation = []
+    for frame in frames:
+        rot.append(frame.R.matrix)
+        translation.append(frame.p.vec.ravel())
+    
+    translation_avg = np.mean(translation, axis=0)
+    rot_avg = np.mean(rot, axis=0)
+    
+    # This gets SVD to make it into a proper rotation
+    U, singular_values, Vt = np.linalg.svd(rot_avg)
+    
+    # Now averaging for averaged rotation matrix itself, so R = U sum (Vt)
+    R_prediction = U @ Vt
+    # +1 is good proper rotation, while -1 is a reflection, so we need to flip it back
+    R_prediction_det = np.linalg.det(R_prediction)
+    if (R_prediction_det < 0):
+        Vt[-1, :] *= -1
+        R_prediction = U @ Vt
+    
+    return Frame(Rot(matrix=R_prediction), vct3(translation_avg))
 
 
 def refine_marker_body(trk: Tracker, placed: PlacedBody, n_readings: int = 30) -> List[vct3]:
