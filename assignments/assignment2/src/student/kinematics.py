@@ -327,7 +327,7 @@ class ImprovedKinematics(Robot):
         
         return {
             "rank": rank,
-            "n_parameters": len(params),
+            "n_params": len(params),
             "singular_values": singular_values,
             "parameter_directions": Vt
         }
@@ -416,9 +416,9 @@ class ImprovedKinematics(Robot):
         return {
             "axis_tilt_vectors": tilt_vectors,
             "unit_axes": unit_axes,
-            "axis_angles_rad": axis_angles,
-            "joint_offsets": self.joint_offsets.copy(),
-            "joint_scale_factors": coeff_normalized,
+            "axis_angles_deg": np.degrees(axis_angles),
+            "joint_offset": self.joint_offsets.copy(),
+            "joint_scale": coeff_normalized,
             "tool_translation_offset_mm": tool_trans,
             "tool_rotation_offset_rad": tool_rot,
         }
