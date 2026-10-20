@@ -17,6 +17,7 @@ from .registration import average_frames
 
 from ..simulation.clock import clock
 from ..simulation.tracker import sample_marker_bodies
+from ..simulation import constants
 
 @dataclass
 class CalibrationData:
@@ -98,7 +99,9 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
     
     poses = []
     home = np.zeros(6)
-    n_samples = 20
+    ratio = constants.TARGET_ANG_ERR_RAD / desired_accuracy
+    n_samples = 30
+
     
     
     for k in range(6):

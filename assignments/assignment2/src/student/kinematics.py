@@ -289,9 +289,18 @@ class ImprovedKinematics(Robot):
         allowed). Must set self.params. Return whatever diagnostics you want
         to report (final cost, iterations, ...).
         """
+        fixed_params = self.params.copy()
+        fixed_params[0] = 0.0
         
-        result = least_squares(self.residuals, self.params, args=(data,), **kwargs)
-        self.params = result.x
+        # Does residual, but keeps the first param fixed
+        def residuals_free(free_params):
+            full_params = fixed_params.copy()
+            full_params[1:] = free_params
+            return self.residuals(full_params, data)
+        
+        result = least_squares(residuals_free, fixed_params[1:], **kwargs)
+        self.params = fixed_params.copy()
+        self.params[1:] = result.x
         return result
 
     def jacobian_rank_report(self, data: CalibrationData, params: Optional[np.ndarray] = None) -> dict:
@@ -321,13 +330,15 @@ class ImprovedKinematics(Robot):
             mod_res_vector = self.residuals(c_param, data)
             mat[:, i] = (mod_res_vector - res_vector) / h
         
+        mat = mat[:, 1:]
+        
         # SVD 
         U, singular_values, Vt = np.linalg.svd(mat, full_matrices=False)
         rank = np.linalg.matrix_rank(mat)
         
         return {
             "rank": rank,
-            "n_params": len(params),
+            "n_params": mat.shape[1],
             "singular_values": singular_values,
             "parameter_directions": Vt
         }
