@@ -11,6 +11,7 @@ from data_types.nominal_types import vct3, Rot, Frame
 
 from assignments.assignment1.src.tracker import Tracker
 from ..simulation import PlacedBody
+from ..simulation.tracker import sample_marker_bodies
 
 from ..simulation.marker_body import (most_recent_observed_markers,update_marker_body,)
 
@@ -148,7 +149,7 @@ def refine_marker_body(trk: Tracker, placed: PlacedBody, n_readings: int = 30) -
     #Look to assignment 1 refine_marker_bodies as we pretty much do the exact same thing
     for j in range(n_readings):
         #Gets the marker bodies
-        my_dict = simulation.sample_marker_bodies(trk)
+        my_dict = sample_marker_bodies(trk)
         obs = my_dict[placed.body.name]
         
         #Error Handling

@@ -1,3 +1,5 @@
+from src.simulation.clock import clock
+
 """
 Unit tests for YOUR components (src/student). The complete tests below fail
 with NotImplementedError until you implement the function they exercise;
@@ -81,13 +83,67 @@ def test_average_frames_is_a_proper_rotation():
 
 def test_refine_marker_body_reduces_layout_error():
     """TODO: write this test.
-
+    
     Hint: define a body, place it in front of a tracker, measure how far the
     nominal layout is from body.get_actual_marker_positions() (ground truth,
     allowed in a test) up to a rigid transform, refine, and show the
     distance shrank. Also check how much simulated time it cost.
     """
-    pytest.skip("TODO")
+    
+    #Gets random seeds
+    np.random.seed(10)
+    
+    nominal_positions = [vct3(40, 40, 40), vct3(40, -40, -40), vct3(-40, 40, -40), vct3(-40, -40, 40)]
+    
+    #Gets the marker bodies
+    body = simulation.define_marker_body("refinement_body", nominal_positions)
+    placed = simulation.place_marker_body(body,Frame(Rot(), vct3(0, 0, 1500)), precision="exact")
+    
+    #Gets the tracker
+    trk = simulation.create_tracker("trk", Frame.eye(), [placed], seed=10)
+    
+    #Gets the ground truth
+    actual_positions = [marker.p for marker in body.get_actual_marker_positions()]
+    
+    #Sees how the estimate layouts is compared to the actual layout
+    def layout_error(positions):
+        #Gets estimated layout
+        alignment = registration.register_points(positions, actual_positions)
+        differences = []
+        
+        #Gets the differences
+        for estimated, actual in zip(positions, actual_positions):
+            difference = alignment * estimated - actual
+            differences.append(difference.vec.ravel())
+        differences = np.array(differences)
+        
+        #Gets the RMS distance error
+        return np.sqrt(np.mean(np.sum(differences**2, axis=1)))
+    
+    error_before = layout_error(body.nominal_marker_positions)
+    
+    #Gets the layout after refinement and measures the time it takes
+    n_readings = 100
+    t_start = clock.elapsed
+    refined = registration.refine_marker_body(trk, placed, n_readings=n_readings)
+    elapsed = clock.elapsed - t_start
+    
+    error_after = layout_error(refined)
+    
+    assert len(refined) == len(nominal_positions)
+    
+    #If the error got worse after refinement, then throw error
+    assert error_after < error_before, (f"Layout error did not decrease: {error_before:.6f} -> {error_after:.6f} mm")
+    
+    #Make sure they are the same length
+    assert len(refined) == len(body.nominal_marker_positions)
+    
+    #Make sure it's stored in marker body
+    for refined_position, stored_position in zip(refined, body.nominal_marker_positions):
+        assert np.allclose(refined_position.vec.ravel(), stored_position.vec.ravel())
+    
+    #Check the clock
+    assert np.isclose(elapsed, n_readings * simulation.constants.SAMPLE_DELTA_T_SEC)
 
 
 # ---------------------------------------------------------------- workflow
@@ -109,7 +165,36 @@ def test_estimate_base_frame_on_synthetic_data():
 
 def test_planned_poses_are_visible_and_within_limits():
     """TODO: write this test for your plan_calibration_poses."""
-    pytest.skip("TODO")
+    
+    #Create Robot and tracker
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    trk = simulation.create_tracker("trk", Frame(Rot(), vct3(900, 0, -1300)), seed=0)
+    
+    #Define marker layout
+    marker_positions = [ vct3(43, 43, 43), vct3(43, -43, -43), vct3(-43, 43, -43), vct3(-43, -43, 43)]
+    
+    #Gets Poses
+    poses = workflow.plan_calibration_poses(rob, trk, marker_positions, desired_accuracy=simulation.constants.TARGET_ANG_ERR_RAD)
+    
+    #Makes sure that we got poses
+    assert len(poses) > 0, "Planner returned no poses"
+    
+    #Checks each poses
+    for index, theta in enumerate(poses):
+        theta = np.asarray(theta)
+        #Checks the format
+        assert theta.shape == (6,), f"Pose {index} needs six joint values"
+        assert np.all(np.isfinite(theta)), f"Pose {index} contains invalid values"
+        
+        #Checks the joint limits
+        assert rob.within_limits(theta), f"Pose {index} exceeds joint limits"
+        
+        #Gets it in world space
+        F_world = rob.F_rob * rob.fwd_kins(theta)
+        world_positions = [F_world * marker for marker in marker_positions]
+        
+        #Makes sure it's visible
+        assert trk.is_visible(world_positions), (f"Markers are not all visible at pose {index}")
 
 
 def test_measure_home_offsets_matches_encoders():
@@ -158,4 +243,47 @@ def test_fit_recovers_synthetic_parameters():
     the parameters themselves need not match if your model has a null
     direction -- compare poses, not parameters.
     """
-    pytest.skip("TODO")
+    #Creates the robots and random number gen
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    rng = np.random.default_rng(12)
+    
+    #Model the generates our data
+    F_X = random_frame(rng, angle=0.2, dist=100.0)
+    generating_model = kinematics.ImprovedKinematics(rob, F_X)
+    
+    #Creates small, known corrections
+    known_params = generating_model.initial_params()
+    known_params[:] = rng.normal(0.0, 1e-3, size=len(known_params))
+    
+    #Matches the coordinate convention that will be later used by fit
+    known_params[0] = 0.0
+    generating_model.params = known_params
+    
+    #Generate observations that shouldn't have noise
+    data = workflow.CalibrationData()
+    for j in range(60):
+        theta = random_theta(rng)
+        observed = generating_model.predict_in_tracker(theta)
+        
+        data.thetas.append(theta.copy())
+        data.frames.append(observed)
+        
+    #New model that doesn't know the predictions
+    fitted_model = kinematics.ImprovedKinematics(rob, F_X)
+    assert np.allclose(fitted_model.params, 0.0)
+    
+    #Fit the model with the fake observations
+    result = fitted_model.fit(data, max_nfev=200, ftol=1e-10, xtol=1e-10, gtol=1e-10)
+    assert result.success, result.message
+    
+    #Test 20 new joint configs
+    for j in range(20):
+        theta = random_theta(rng)
+        
+        #Measure and check the random errors
+        expected = generating_model.predict_in_tracker(theta)
+        predicted = fitted_model.predict_in_tracker(theta)
+        angle_error, position_error = metrics.frame_error(expected, predicted)
+        
+        assert angle_error < 1e-6, (f"Test pose {j}: rotation error = {angle_error} rad")
+        assert position_error < 1e-3, (f"Test pose {j}: position error = {position_error} mm")
