@@ -101,8 +101,15 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
     home = np.zeros(6)
     ratio = constants.TARGET_ANG_ERR_RAD / desired_accuracy
     n_samples = 30
-
     
+    F_home = rob.F_rob * rob.fwd_kins(home)
+    home_markers = []
+    for marker in mbee_local_positions:
+        home_markers.append(F_home * marker)
+    
+    if not rob.within_limits(home) or not trk.is_visible(home_markers):
+        raise ValueError("Home configuration is outside limits or not visible")
+    poses.append(home.copy())
     
     for k in range(6):
         #Gets a list of random values between the min and the max
@@ -125,8 +132,14 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
             if rob.within_limits(theta) and trk.is_visible(world_positions):
                 poses.append(theta.copy())
                 accepted += 1
-                
+        
         print(f"Joint {k + 1}: {accepted}/{n_samples} poses accepted")
+        
+        #Error handling 
+        if accepted < 3:
+            raise ValueError(f"Joint {k + 1}: fewer than three visible sweep positions")
+        
+        poses.append(home.copy())
     #If there are no visible calibrations
     if not poses:
         raise ValueError("No visible calibration poses found")

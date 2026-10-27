@@ -1,0 +1,51 @@
+Before return home:
+    SEED: 0
+    Forward nominal: {'n': 729, 'rms_angle': 0.04164925555265166, 'max_angle': 0.07337692115871769, 'rms_pos': 4.830896790471555, 'max_pos': 8.803327630641931}
+    Forward improved: {'n': 729, 'rms_angle': 0.000471475661583957, 'max_angle': 0.0007775937459906332, 'rms_pos': 0.08118426651161707, 'max_pos': 0.1309539767881521}
+    Inverse nominal: {'n': 40, 'rms_angle': 0.04476794013141114, 'max_angle': 0.07320072524761004, 'rms_pos': 4.720820020815177, 'max_pos': 7.262789752530109}
+    Inverse improved: {'n': 40, 'rms_angle': 0.0005124429867585151, 'max_angle': 0.0009606586977844325, 'rms_pos': 0.08109176187528831, 'max_pos': 0.12146848826901846}
+    Jacobian rank: 33 / 33
+    Smallest singular value: 2.41402125172503
+    Calibration time (simulated seconds): 421.1961169947723
+    Testing time (simulated seconds): 1106.4662600864217
+
+    SEED: 1
+    Forward nominal: {'n': 729, 'rms_angle': 0.032743533118017816, 'max_angle': 0.05506679430724984, 'rms_pos': 7.999151692489721, 'max_pos': 16.952417516949474}
+    Forward improved: {'n': 729, 'rms_angle': 0.00033111091367896497, 'max_angle': 0.0006570558400114186, 'rms_pos': 0.0727504913430624, 'max_pos': 0.13697671846571915}
+    Inverse nominal: {'n': 40, 'rms_angle': 0.034431277588465405, 'max_angle': 0.054942226720646366, 'rms_pos': 8.33642812348253, 'max_pos': 14.343557346836231}
+    Inverse improved: {'n': 40, 'rms_angle': 0.00035268736739968855, 'max_angle': 0.0007268409705997303, 'rms_pos': 0.07437779782931733, 'max_pos': 0.11798543990367291}
+    Jacobian rank: 33 / 33
+    Smallest singular value: 2.413989899056427
+    Calibration time (simulated seconds): 421.19075275370403
+    Testing time (simulated seconds): 1089.4767946759212
+
+    SEED 2:
+    Forward nominal: {'n': 729, 'rms_angle': 0.035417739015457785, 'max_angle': 0.05423061034782657, 'rms_pos': 6.210653253548755, 'max_pos': 13.649142302883758}
+    Forward improved: {'n': 729, 'rms_angle': 0.00034660579419052475, 'max_angle': 0.0005235310213689915, 'rms_pos': 0.05058231942859332, 'max_pos': 0.09658773512208244}
+    Inverse nominal: {'n': 40, 'rms_angle': 0.03564074303739475, 'max_angle': 0.05260113868495344, 'rms_pos': 6.563784144206312, 'max_pos': 12.69376197098971}
+    Inverse improved: {'n': 40, 'rms_angle': 0.00037934523367077317, 'max_angle': 0.0007488825690955783, 'rms_pos': 0.05786837902912126, 'max_pos': 0.09756923519001724}
+    Jacobian rank: 33 / 33
+    Smallest singular value: 2.4131289402826837
+    Calibration time (simulated seconds): 421.19176787997156
+    Testing time (simulated seconds): 1089.1458952397513
+
+
+
+    Time:
+        Added to the top of program:
+            import time
+            program_start = time.perf_counter()
+
+        Added to the end of program:
+            program_runtime = time.perf_counter() - program_start
+
+            print(f"Actual program runtime: {program_runtime:.2f} seconds")
+            print(f"Actual program runtime: {program_runtime / 60:.2f} minutes")
+            print("Within 10-minute limit:", program_runtime <= 600)
+
+    Output:
+        Actual program runtime: 9.97 seconds
+        Actual program runtime: 0.17 minutes
+        Within 10-minute limit: True
+
+After return home:
