@@ -162,6 +162,22 @@ def test_estimate_base_frame_on_synthetic_data():
     assert np.allclose(F_est.R.matrix, F_X.R.matrix, atol=1e-9)
     assert np.allclose(F_est.p.vec, F_X.p.vec, atol=1e-6)
 
+def test_correct_number_of_poses():
+    """Ensure that the number of planned poses matches the expected count based on rerolls and samples."""
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    trk = simulation.create_tracker("trk", Frame(Rot(), vct3(900, 0, -1300)), seed=0)
+    marker_positions = [
+        vct3( 1,  1,  73),
+        vct3( 71, -2, 2),
+        vct3(-72,  1, 2),
+        vct3(0, 74,  -1),
+        vct3(0, 2, -73),
+        vct3(-1.5, -72, -1.5)
+    ]
+    poses = workflow.plan_calibration_poses(rob, trk, marker_positions, desired_accuracy=0.2, rnd_err_fraction=0.5, fit_err_fraction=0.5)
+    ###TODO: finish
+    
+
 
 def test_planned_poses_are_visible_and_within_limits():
     """TODO: write this test for your plan_calibration_poses."""
@@ -203,6 +219,11 @@ def test_planned_poses_are_visible_and_within_limits():
         #Makes sure it's visible
         assert trk.is_visible(world_positions), (f"Markers are not all visible at pose {index}")
 
+#def test length data is the same as length of poses and same thetas, total lengths
+#check that repeats works
+
+#If no poses passed raise valueerror
+#test that the lengh of time it takes
 
 def test_measure_home_offsets_matches_encoders():
     rob = simulation.create_robot("rob", Frame.eye(), seed=9)
@@ -226,6 +247,16 @@ def test_improved_kinematics_initial_params_match_nominal():
         assert np.allclose(F_nom.p.vec, F_imp.p.vec, atol=1e-9)
     assert np.allclose(improved.base_frame().p.vec, F_X.p.vec, atol=1e-9)
 
+#test forward kins round trip
+
+#test base_Frame if None use self.params
+#test base_fram with expected params
+
+#test jacobian report none
+
+#test param report in if returns self params as expected
+
+#test residual close to 0 for data that matches init
 
 def test_improved_inv_kins_round_trip():
     rob = simulation.create_robot("rob", Frame.eye(), seed=0)
