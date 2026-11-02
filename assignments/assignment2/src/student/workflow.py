@@ -58,7 +58,7 @@ def measure_home_offsets(rob: Robot, n_homings: int = 5) -> np.ndarray:
     for i in range(n_homings):
         readings.append(rob.home_robot())
     
-    # Encoder readings = negative of the systematic offsets plus noise
+    # Encoder readings = negative of the systematic offsets plus noise (averaged out over multiple homings)
     return -np.mean(readings, axis = 0)
 
 
@@ -96,11 +96,56 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
     
     if (desired_accuracy <= 0):
         raise ValueError("Desired_accuracy must be positive")
+
+    if (kwargs.get("rnd_err_fraction") is not None
+        and kwargs.get("rnd_err_fraction") > 0 
+        and kwargs.get("rnd_err_fraction") < 1):
+        rnd_err_fraction = kwargs.get("rnd_err_fraction")
+    else:
+        rnd_err_fraction = 0.25
+
+    if (kwargs.get("fit_err_fraction") is not None 
+        and kwargs.get("fit_err_fraction") > 0 
+        and kwargs.get("fit_err_fraction") < 1):
+        fit_err_fraction = kwargs.get("fit_err_fraction")
+    else:
+        fit_err_fraction = 0.25
     
     poses = []
-    home = np.zeros(6)
-    ratio = constants.TARGET_ANG_ERR_RAD / desired_accuracy
-    n_samples = 30
+    home = np.zeros(6) 
+    pos_tol = constants.TARGET_POS_ERR_MM * constants.TARGET_ANG_ERR_RAD / desired_accuracy
+
+    # array of 6; contains the number of rerols in per pose in each axis 
+    # required to get the random error accuracy under the required threshold
+    rerols_per_pose = np.ceil(
+        3 * constants.SIGMA_RND[:3] / (rnd_err_fraction * pos_tol)
+    )
+    rerols_per_pose = np.concatenate([
+        rerols_per_pose,
+        np.ceil(3 * constants.SIGMA_RND[3:] / (rnd_err_fraction * desired_accuracy)),
+    ]).astype(int)
+
+    print(f"Rerolls per pose: {rerols_per_pose}")
+
+    # array of 6; contains the number of poses per axis that we estimate will give us a good quadratic fit result
+    # Use 3 as the minimum even though we specifically add the home pose so 2 would be sufficient
+    n_samples = np.maximum(
+        3,
+        constants.OMEGA_SYS[:3]
+        * (constants.THETA_MAX[:3] - constants.THETA_MIN[:3])
+        / (2 * fit_err_fraction * pos_tol),
+    )
+    n_samples = np.concatenate([
+        n_samples,
+        np.maximum(
+            3,
+            constants.OMEGA_SYS[3:]
+            * (constants.THETA_MAX[3:] - constants.THETA_MIN[3:])
+            / (2 * fit_err_fraction * desired_accuracy),
+        ),
+    ])
+    n_samples = np.ceil(n_samples).astype(int)
+    print(f"Number of samples per joint: {n_samples}")
     
     F_home = rob.F_rob * rob.fwd_kins(home)
     home_markers = []
@@ -113,27 +158,26 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
     
     for k in range(6):
         #Gets a list of random values between the min and the max
-        sample_values = np.linspace(rob.theta_min[k], rob.theta_max[k], n_samples)
+        sample_values = np.linspace(rob.theta_min[k], rob.theta_max[k], n_samples[k])
         accepted = 0
-        
         for value in sample_values:
-            #Creates a candidate joint configuration
+            # Creates a candidate joint configuration.
             theta = home.copy()
             theta[k] = value
-            
-            #Gets the frame shift to the world frame
+
+            # Gets the world positions of the marker body attached to the end effector.
             F_world = rob.F_rob * rob.fwd_kins(theta)
-            
-            #Gets the world positions from the marker body attached to the robot’s end effector
-            world_positions = []
-            for marker in mbee_local_positions:
-                world_positions.append(F_world * marker)
-                
+            world_positions = [
+                F_world * marker for marker in mbee_local_positions
+            ]
+
             if rob.within_limits(theta) and trk.is_visible(world_positions):
-                poses.append(theta.copy())
+                # Revisit each accepted pose once per reroll to average random noise.
+                for _ in range(rerols_per_pose[k]):
+                    poses.append(theta.copy())
                 accepted += 1
-        
-        print(f"Joint {k + 1}: {accepted}/{n_samples} poses accepted")
+
+        print(f"Joint {k + 1}: {accepted}/{n_samples[k]*rerols_per_pose[k]} poses accepted")
         
         #Error handling 
         if accepted < 3:
@@ -148,7 +192,7 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
 
 
 def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
-                             thetas: List[np.ndarray], repeats: int = 1) -> CalibrationData:
+                             thetas: List[np.ndarray], repeats: int = 10) -> CalibrationData:
     """
     # TODO (DONE): implement.
 
@@ -174,7 +218,7 @@ def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
     data = CalibrationData()
     t_start = clock.elapsed
     
-    #Goes through all the theatas
+    #Goes through all the thetas
     for i in range (len(thetas)):
         
         # Moves the joints
@@ -182,6 +226,7 @@ def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
         
         #Track the observations through each repeat
         for j in range(repeats):
+
             # Gets the observations
             observations = sample_marker_bodies(trk)
             observed = observations[mbee_placed.body.name]

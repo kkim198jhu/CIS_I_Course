@@ -7,6 +7,7 @@ from typing import Dict, Optional
 import numpy as np
 from scipy.optimize import least_squares
 
+from assignments.assignment2.src.simulation.constants import OMEGA_SYS
 from data_types.nominal_types import vct3, Rot, Frame
 from uncertainty_networks.se3 import log_so3, exp_se3, exp_so3
 

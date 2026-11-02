@@ -171,7 +171,14 @@ def test_planned_poses_are_visible_and_within_limits():
     trk = simulation.create_tracker("trk", Frame(Rot(), vct3(900, 0, -1300)), seed=0)
     
     #Define marker layout
-    marker_positions = [ vct3(43, 43, 43), vct3(43, -43, -43), vct3(-43, 43, -43), vct3(-43, -43, 43)]
+    marker_positions = [
+    vct3( 1,  1,  73),
+    vct3( 71, -2, 2),
+    vct3(-72,  1, 2),
+    vct3(0, 74,  -1),
+    vct3(0, 2, -73),
+    vct3(-1.5, -72, -1.5)
+]
     
     #Gets Poses
     poses = workflow.plan_calibration_poses(rob, trk, marker_positions, desired_accuracy=simulation.constants.TARGET_ANG_ERR_RAD)
