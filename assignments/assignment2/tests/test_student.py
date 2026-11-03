@@ -174,8 +174,17 @@ def test_correct_number_of_poses():
         vct3(0, 2, -73),
         vct3(-1.5, -72, -1.5)
     ]
+    poses_per_joint = 4
+    rerolls_per_pose = 1
+    # +6 for the manually added home poses between joints +1 for the initial home pose
+    total_poses = poses_per_joint * rerolls_per_pose*6 + 6 + 1
+
     poses = workflow.plan_calibration_poses(rob, trk, marker_positions, desired_accuracy=0.2, rnd_err_fraction=0.5, fit_err_fraction=0.5)
-    ###TODO: finish
+    assert len(poses) > 0, "Planner returned no poses"
+    assert all(len(theta) == 6 for theta in poses), "Each pose should have 6 joint values"
+    assert all(rob.within_limits(theta) for theta in poses), "All poses should be within joint limits"
+    assert all(trk.is_visible([rob.F_rob * rob.fwd_kins(theta) * marker for marker in marker_positions]) for theta in poses), "All poses should have visible markers"
+    assert len(poses) == total_poses, f"Expected {total_poses} poses, got {len(poses)}"
     
 
 
@@ -219,11 +228,46 @@ def test_planned_poses_are_visible_and_within_limits():
         #Makes sure it's visible
         assert trk.is_visible(world_positions), (f"Markers are not all visible at pose {index}")
 
-#def test length data is the same as length of poses and same thetas, total lengths
-#check that repeats works
+def test_collect_calibration_data_length_matches_poses():
+    """TODO: write this test for your collect_calibration_data function."""
+    # Example test structure
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    trk = simulation.create_tracker("trk", Frame(Rot(), vct3(900, 0, -1300)), seed=0)
+    marker_positions = [
+        vct3( 1,  1,  73),
+        vct3( 71, -2, 2),
+        vct3(-72,  1, 2),
+        vct3(0, 74,  -1),
+        vct3(0, 2, -73),
+        vct3(-1.5, -72, -1.5)
+    ]
+    mbee_placed = simulation.create_robot_calibration_body(rob, marker_positions)
+    poses = workflow.plan_calibration_poses(rob, trk, marker_positions, desired_accuracy=1)
+    simulation.add_marker_bodies(trk, [mbee_placed])
+    #we expect the minimum number of poses to be collected
+    expected_length = len(poses)
+    data = workflow.collect_calibration_data(rob, trk, mbee_placed, poses, repeats=1)
+    assert len(data) == expected_length, f"Expected {expected_length} data entries, got {len(data)}"
+    #check that repeating measurements leads to increased data length
+    data_repeated = workflow.collect_calibration_data(rob, trk, mbee_placed, poses, repeats=2)
+    assert len(data_repeated) == 2 * expected_length, f"Expected {2 * expected_length} data entries, got {len(data_repeated)}"
 
-#If no poses passed raise valueerror
-#test that the lengh of time it takes
+def test_collect_calibration_data_raises_on_empty_poses():
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    trk = simulation.create_tracker("trk", Frame(Rot(), vct3(900, 0, -1300)), seed=0)
+    marker_positions = [
+        vct3( 1,  1,  73),
+        vct3( 71, -2, 2),
+        vct3(-72,  1, 2),
+        vct3(0, 74,  -1),
+        vct3(0, 2, -73),
+        vct3(-1.5, -72, -1.5)
+    ]
+    mbee_placed = simulation.create_robot_calibration_body(rob, marker_positions)
+    simulation.add_marker_bodies(trk, [mbee_placed])
+    poses = []
+    with pytest.raises(ValueError):
+        workflow.collect_calibration_data(rob, trk, mbee_placed, poses, repeats=1)
 
 def test_measure_home_offsets_matches_encoders():
     rob = simulation.create_robot("rob", Frame.eye(), seed=9)
@@ -247,16 +291,46 @@ def test_improved_kinematics_initial_params_match_nominal():
         assert np.allclose(F_nom.p.vec, F_imp.p.vec, atol=1e-9)
     assert np.allclose(improved.base_frame().p.vec, F_X.p.vec, atol=1e-9)
 
-#test forward kins round trip
+def test_base_frame_if_none_uses_self_params():
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    improved = kinematics.ImprovedKinematics(rob, Frame.eye())
+    F_X = improved.base_frame()
+    assert np.allclose(F_X.p.vec, improved.params[:3], atol=1e-9)
 
-#test base_Frame if None use self.params
-#test base_fram with expected params
+def test_jacobian_rank_report_not_none_after_setting_params():
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    trk = simulation.create_tracker("trk", Frame(Rot(), vct3(900, 0, -1300)), seed=0)
+    marker_positions = [
+        vct3( 1,  1,  73),
+        vct3( 71, -2, 2),
+        vct3(-72,  1, 2),
+        vct3(0, 74,  -1),
+        vct3(0, 2, -73),
+        vct3(-1.5, -72, -1.5)
+    ]
+    mbee_placed = simulation.create_robot_calibration_body(rob, marker_positions)
+    poses = workflow.plan_calibration_poses(rob, trk, marker_positions, desired_accuracy=1)
+    simulation.add_marker_bodies(trk, [mbee_placed])
 
-#test jacobian report none
+    data = workflow.collect_calibration_data(rob, trk, mbee_placed, poses, repeats=1)
 
-#test param report in if returns self params as expected
+    print(data)
+    improved = kinematics.ImprovedKinematics(rob, Frame.eye())
 
-#test residual close to 0 for data that matches init
+    jacobian_report = improved.jacobian_rank_report(data)
+    assert jacobian_report is not None
+    # jacobian report should have 1 less parameter than actual since we keep param[0] fixed
+    assert jacobian_report["n_params"] == len(improved.params) - 1
+    assert jacobian_report["rank"] <= jacobian_report["n_params"]
+
+def test_param_report_is_non_empty():
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    improved = kinematics.ImprovedKinematics(rob, Frame.eye())
+    improved.params = improved.initial_params() + 1e-3 * np.random.default_rng(7).normal(size=improved.params.shape)
+    param_report = improved.parameters_report()
+    assert param_report is not None
+    assert len([item for key, item in param_report.items()]) > 0
+
 
 def test_improved_inv_kins_round_trip():
     rob = simulation.create_robot("rob", Frame.eye(), seed=0)

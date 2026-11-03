@@ -222,6 +222,10 @@ def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
     #Error handling
     if (repeats < 1):
         raise ValueError("Repeats is 0 or below")
+    if thetas is None:
+        raise ValueError("No poses to visit.")
+    if len(thetas) == 0:
+        raise ValueError("No poses to visit.")
     
     # Starts the clock and initialize the data
     data = CalibrationData()
