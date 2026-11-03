@@ -102,18 +102,18 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
         and kwargs.get("rnd_err_fraction") < 1):
         rnd_err_fraction = kwargs.get("rnd_err_fraction")
     else:
-        rnd_err_fraction = 0.25
+        rnd_err_fraction = 0.15
 
     if (kwargs.get("fit_err_fraction") is not None 
         and kwargs.get("fit_err_fraction") > 0 
         and kwargs.get("fit_err_fraction") < 1):
         fit_err_fraction = kwargs.get("fit_err_fraction")
     else:
-        fit_err_fraction = 0.25
+        fit_err_fraction = 0.35
     
     poses = []
     home = np.zeros(6) 
-    pos_tol = constants.TARGET_POS_ERR_MM * constants.TARGET_ANG_ERR_RAD / desired_accuracy
+    pos_tol = constants.TARGET_POS_ERR_MM * desired_accuracy/constants.TARGET_ANG_ERR_RAD
 
     # array of 6; contains the number of rerols in per pose in each axis 
     # required to get the random error accuracy under the required threshold
@@ -135,6 +135,7 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
         * (constants.THETA_MAX[:3] - constants.THETA_MIN[:3])
         / (2 * fit_err_fraction * pos_tol),
     )
+  
     n_samples = np.concatenate([
         n_samples,
         np.maximum(
@@ -157,8 +158,16 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
     poses.append(home.copy())
     
     for k in range(6):
-        #Gets a list of random values between the min and the max
-        sample_values = np.linspace(rob.theta_min[k], rob.theta_max[k], n_samples[k])
+        # Generate one extra grid point so excluding home preserves the requested count.
+        # the number of poses is odd we will have to deleted the home value so we will add another
+        # pose to make the number even
+        if n_samples[k] % 2 == 1:
+            n_samples[k] += 1
+
+        sample_values = np.linspace(
+            rob.theta_min[k], rob.theta_max[k], n_samples[k]
+        )
+
         accepted = 0
         for value in sample_values:
             # Creates a candidate joint configuration.
@@ -175,7 +184,7 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
                 # Revisit each accepted pose once per reroll to average random noise.
                 for _ in range(rerols_per_pose[k]):
                     poses.append(theta.copy())
-                accepted += 1
+                    accepted += 1
 
         print(f"Joint {k + 1}: {accepted}/{n_samples[k]*rerols_per_pose[k]} poses accepted")
         
