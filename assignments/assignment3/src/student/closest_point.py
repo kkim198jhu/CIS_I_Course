@@ -159,5 +159,5 @@ def closest_points_on_mesh(points: np.ndarray, mesh: Mesh) -> Tuple[np.ndarray, 
         closest[i] = best_points[best_index]
         triangle_indices[i] = best_index
         distances[i] = np.sqrt(best_dist_sq[best_index])
-
+    
     return closest, triangle_indices, distances
