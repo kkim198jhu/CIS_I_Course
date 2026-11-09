@@ -8,6 +8,7 @@ import numpy as np
 from ..mesh import Mesh, PatchBox
 from ..session import Session, SceneDesign, PointerPlacement
 from .report import RegistrationReport
+from data_types.nominal_types import vct3, Rot, Frame
 
 
 @dataclass
@@ -30,7 +31,13 @@ def design_scene() -> SceneDesign:
     TODO: implement -- return the same values the notebook's Step 1 cell uses
     (grading calls this instead of the notebook).
     """
-    raise NotImplementedError("TODO: implement design_scene")
+    F_tracker_approx = Frame(Rot(), vct3(0, 0, -1500))
+    p_tip = vct3(0, 0, -150)
+    ref_marker_positions = [vct3(-40, -30, 0), vct3(40, -30, 0), vct3(0, 40, 0), vct3(10, 0, 25)]
+
+    ptr_marker_positions = [vct3(-30, -20, 0), vct3(30, -20, 0), vct3(0, 30, 0), vct3(10, 5, 20)]
+    
+    return SceneDesign(F_tracker_approx, ref_marker_positions, ptr_marker_positions, p_tip)
 
 
 def plan_patches(boxes: List[PatchBox], n_patches: int, samples_per_patch: int) -> List[int]:
