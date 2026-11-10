@@ -43,10 +43,23 @@ def design_scene() -> SceneDesign:
 def plan_patches(boxes: List[PatchBox], n_patches: int, samples_per_patch: int) -> List[int]:
     """
     TODO: implement.
+    Return one patch ID (number that labels a region) for each planned pointer touch (one simulated placement of the pointer tip)
+    
     input: the patch boxes, how many patches to use, samples per patch
     output: ordered list of patch ids to call place_pointer with (repeats allowed)
     """
-    raise NotImplementedError("TODO: implement plan_patches")
+    #Error handling
+    if not 1 <= n_patches <= len(boxes):
+        raise ValueError("n_patches must be between 1 and the number of boxes")
+    if samples_per_patch < 1:
+        raise ValueError("samples_per_patch must be positive")
+    
+    plan = []
+    for box in boxes[:n_patches]:
+        for i in range(samples_per_patch):
+            plan.append(box.id)
+    
+    return plan
 
 
 def collect_samples(session: Session, plan: List[int]) -> SampleSet:
