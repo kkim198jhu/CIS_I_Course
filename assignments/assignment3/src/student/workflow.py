@@ -65,12 +65,48 @@ def plan_patches(boxes: List[PatchBox], n_patches: int, samples_per_patch: int) 
 def collect_samples(session: Session, plan: List[int]) -> SampleSet:
     """
     TODO: implement.
+    Collect tip positions in reference-body coordinates for a patch plan
+    
     For every patch id: session.place_pointer, session.sample_marker_bodies,
     d_k = F_ref^-1 F_ptr p_tip; skip (and log) samples where a body was invisible.
     input: session, patch plan
     output: SampleSet
     """
-    raise NotImplementedError("TODO: implement collect_samples")
+    
+    #Initalize the variables
+    samples = SampleSet()
+    t_start = session.elapsed()
+    p_tip = session.design.p_tip
+    
+    
+    for patch_id in plan:
+        #Place pointer and read the tracker
+        handle = session.place_pointer(patch_id)
+        observations = session.sample_marker_bodies()
+        
+        ref_obs = observations["ref"]
+        ptr_obs = observations["ptr"]
+        
+        #Check that it can see the bodies
+        if ref_obs is None or ptr_obs is None:
+            print(f"Skipped sample {handle.sample_index} on patch {patch_id}: a body was not visible")
+            continue
+        
+        #Express tip's position in reference fra e
+        F_ref = ref_obs.frame
+        F_ptr = ptr_obs.frame
+        
+        tip_tracker = F_ptr * p_tip
+        tip_ref = F_ref.inv() * tip_tracker
+        
+        #Add it to samples
+        samples.handles.append(handle)
+        samples.patch_ids.append(patch_id)
+        samples.d_ref.append(tip_ref.vec.ravel())
+    
+    #Record the time
+    samples.t_collect = session.elapsed() - t_start
+    return samples
 
 
 def run_registration(session: Session, mesh: Mesh, boxes: List[PatchBox], **kwargs) -> RegistrationReport:
