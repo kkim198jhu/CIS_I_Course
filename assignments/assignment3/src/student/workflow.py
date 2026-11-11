@@ -4,7 +4,11 @@ from dataclasses import dataclass, field
 from typing import List
 
 import numpy as np
+import time
 
+from .icp import coarse_registration, icp
+from .uncertainty import registration_covariance, predicted_tre
+from .report import RegistrationReport, residual_statistics
 from ..mesh import Mesh, PatchBox
 from ..session import Session, SceneDesign, PointerPlacement
 from .report import RegistrationReport
@@ -112,8 +116,104 @@ def collect_samples(session: Session, plan: List[int]) -> SampleSet:
 def run_registration(session: Session, mesh: Mesh, boxes: List[PatchBox], **kwargs) -> RegistrationReport:
     """
     TODO: implement -- the headless entry point used for grading:
+    Collect samples, register reference to CT, and return the report.
+    
     plan -> collect -> coarse_registration -> icp -> uncertainty -> RegistrationReport.
     input: session, mesh, boxes, your own keyword options
     output: RegistrationReport
     """
-    raise NotImplementedError("TODO: implement run_registration")
+    #Starts all the clocks
+    reality_start = time.perf_counter()
+    sim_start = session.elapsed()
+    
+    #Gets the session's initial guess
+    F0_reg = session.initial_registration_guess()
+    
+    #Get the correct parameters from kwargs
+    n_patches = kwargs.get("n_patches", len(boxes))
+    samples_per_patch = kwargs.get("samples_per_patch", 4)
+    
+    #Plan patches and collect samples
+    plan = plan_patches(boxes, n_patches, samples_per_patch)
+    samples = collect_samples(session, plan)
+    
+    #Needs at least 3 samples for a plane
+    if len(samples) < 3:
+        raise ValueError("Too few visible samples for registration")
+    
+    #Group measured points by patch id
+    d = samples.as_array()
+    by_patch = {}
+    
+    #Goes through each sample
+    for patch_id, point in zip(samples.patch_ids, d):
+        #add it if it doesn't exist yet, or add to current
+        if patch_id not in by_patch:
+            by_patch[patch_id] = []
+        by_patch[patch_id].append(point)
+    
+    #Turns this into a 2D array with [x, y, z] readings and allows for coarse_registration
+    for patch_id in by_patch:
+        by_patch[patch_id] = np.array(by_patch[patch_id])
+    
+    #Find the alignment and estimate its uncertainty
+    F_coarse = coarse_registration(by_patch, boxes)
+    result = icp(
+        d, mesh, F_coarse,
+        max_iter=kwargs.get("max_iter", 100),
+        tol=kwargs.get("tol", 1e-4),
+        reject=kwargs.get("reject", "mad"))
+    mu, C_reg = registration_covariance(result, F0_reg)
+    prediction = predicted_tre(mesh, result.F_reg, C_reg)
+    
+    #Creates one counter record for each planned patch.
+    patch_counts = {}
+    for patch_id in plan:
+        if patch_id not in patch_counts:
+            patch_counts[patch_id] = {
+                "patch_id": int(patch_id),
+                "n_samples": 0,
+                "n_used": 0,
+                "n_rejected": 0,
+            }
+    
+    #Record what happened to each collected sample
+    sample_records = []
+    for i, handle in enumerate(samples.handles):
+        patch_id = samples.patch_ids[i]
+        used = bool(result.inlier_mask[i])
+        
+        #Check if it is used or rejected
+        patch_counts[patch_id]["n_samples"] += 1
+        if used:
+            patch_counts[patch_id]["n_used"] += 1
+        else:
+            patch_counts[patch_id]["n_rejected"] += 1
+        
+        #Add it to the sample records
+        sample_records.append({
+            "sample_index": int(handle.sample_index),
+            "patch_id": int(patch_id),
+            "t_sim": float(handle.t_sim),
+            "d_ref": samples.d_ref[i].tolist(),
+            "residual_mm": float(result.residuals[i]),
+            "used": used,
+            "reason": "inlier" if used else "ICP outlier"})
+    
+    #Calculate the residual statistics and elapsed time
+    stats = residual_statistics(result.residuals[result.inlier_mask])
+    simulated_time = session.elapsed() - sim_start
+    
+    #Return a bunch for the report
+    return RegistrationReport(
+        F_reg=result.F_reg,
+        patches=list(patch_counts.values()),
+        samples=sample_records,
+        residual_stats=stats,
+        t_simulated=simulated_time,
+        t_wall=time.perf_counter() - reality_start,
+        n_icp_iterations=result.n_iter,
+        converged=result.converged,
+        eta_reg={"mu": mu, "C_reg": C_reg, "convention": "left_ct"},
+        predicted_tre=prediction
+    )
