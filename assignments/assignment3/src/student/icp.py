@@ -153,7 +153,6 @@ def icp(d: np.ndarray, mesh: Mesh, F_init: Frame, max_iter: int = 100, tol: floa
         imask = np.ones(len(d), dtype=bool)
         
         #Check if it is median absolute deviation
-        
         if reject == "mad":
             median = np.median(residuals)
             mad = np.median(np.abs(residuals - median))
