@@ -12,7 +12,9 @@ from .icp import IcpResult
 
 def registration_covariance(result: IcpResult, F0_reg: Frame) -> Tuple[np.ndarray, np.ndarray]:
     """
-    TODO: implement.
+    TODO(DONE): implement.
+    Estimate the correction from F0_reg and local frame uncertainty.
+    
     Left/CT convention: F*_reg = Exp(delta) . F_reg, eta_reg = [alpha; eps] relative to F0_reg.
     input: IcpResult, the initial guess F0_reg
     output: mu (6,) estimate of eta_reg, C_reg (6,6) covariance of delta
@@ -64,8 +66,50 @@ def registration_covariance(result: IcpResult, F0_reg: Frame) -> Tuple[np.ndarra
 
 def predicted_tre(mesh: Mesh, F_reg: Frame, C_reg: np.ndarray) -> dict:
     """
-    TODO: implement.
+    TODO(DONE): implement.
+    Summarize per-vertex RMS position uncertainties in millimeters.
+    
     input: mesh, estimated F_reg, C_reg (6,6)
     output: {"rms", "mean", "max", "p90"} of the predicted TRE over the mesh vertices
     """
-    raise NotImplementedError("TODO: implement predicted_tre")
+    
+    #Gets the covariance matrix
+    C_reg = np.asarray(C_reg, dtype=float)
+    
+    #Error handling: Matrix is valid
+    if C_reg.shape != (6, 6) or not np.isfinite(C_reg).all():
+        raise ValueError("C_reg must be a finite 6 by 6 covariance matrix")
+    
+    #Error handling: there are vertices
+    if mesh.n_vertices == 0:
+        raise ValueError("The mesh must contain vertices (nonzero)")
+    
+    #Prep and store identity matrix
+    vertex_rms = np.empty(mesh.n_vertices)
+    identity = np.eye(3)
+    
+    #Get one vertex at a time
+    for i, point in enumerate(mesh.vertices):
+        x, y, z = point
+        
+        #Skew matrix from class
+        skew_point = np.array([
+            [0.0, -z, y],
+            [z, 0.0, -x],
+            [-y, x, 0.0]])
+        
+        #Stack the matrix to get a 3x6 with the identity on the bottom
+        J = np.column_stack((-skew_point, identity))
+        
+        #Note that point error ≈ J @ frame error, so
+        #point cov = J @ C_reg @ J.T
+        point_cov = J @ C_reg @ J.T
+        
+        variance_sum = float(point_cov[0, 0] + point_cov[1, 1] + point_cov[2, 2])
+        vertex_rms[i] = np.sqrt(max(variance_sum, 0.0))
+    
+    return {
+        "rms": float(np.sqrt(np.mean(vertex_rms**2))),
+        "mean": float(np.mean(vertex_rms)),
+        "max": float(np.max(vertex_rms)),
+        "p90": float(np.percentile(vertex_rms, 90))}

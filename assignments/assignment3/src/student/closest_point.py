@@ -10,6 +10,7 @@ from ..mesh import Mesh
 
 def closest_point_on_triangle(p: vct3, a: vct3, b: vct3, c: vct3) -> vct3:
     """
+    TODO(DONE)
     Return the closest point to p on the triangle with corners a, b, c.
     
     input: query point p, triangle corners a, b, c
@@ -65,7 +66,7 @@ def closest_point_on_triangle(p: vct3, a: vct3, b: vct3, c: vct3) -> vct3:
 
 def closest_points_on_mesh(points: np.ndarray, mesh: Mesh) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    TODO: implement (vectorised; a per-triangle Python loop is far too slow).
+    TODO(DONE): implement (vectorised; a per-triangle Python loop is far too slow).
     For each input point in CT coordinates, find the closest point on the mesh.
     
     input: points (K,3) in CT coordinates, mesh

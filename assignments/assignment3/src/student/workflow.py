@@ -28,7 +28,7 @@ class SampleSet:
 
 def design_scene() -> SceneDesign:
     """
-    TODO: implement -- return the same values the notebook's Step 1 cell uses
+    TODO(DONE): implement -- return the same values the notebook's Step 1 cell uses
     (grading calls this instead of the notebook).
     """
     F_tracker_approx = Frame(Rot(), vct3(0, 0, -1500))
@@ -42,7 +42,7 @@ def design_scene() -> SceneDesign:
 
 def plan_patches(boxes: List[PatchBox], n_patches: int, samples_per_patch: int) -> List[int]:
     """
-    TODO: implement.
+    TODO(DONE): implement.
     Return one patch ID (number that labels a region) for each planned pointer touch (one simulated placement of the pointer tip)
     
     input: the patch boxes, how many patches to use, samples per patch
@@ -64,7 +64,7 @@ def plan_patches(boxes: List[PatchBox], n_patches: int, samples_per_patch: int) 
 
 def collect_samples(session: Session, plan: List[int]) -> SampleSet:
     """
-    TODO: implement.
+    TODO(DONE): implement.
     Collect tip positions in reference-body coordinates for a patch plan
     
     For every patch id: session.place_pointer, session.sample_marker_bodies,

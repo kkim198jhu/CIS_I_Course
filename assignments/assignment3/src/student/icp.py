@@ -25,7 +25,7 @@ class IcpResult:
 
 def register_points(a: List[vct3], b: List[vct3]) -> Frame:
     """
-    TODO: implement (your own; do not call the simulator's solver).
+    TODO(DONE): implement (your own; do not call the simulator's solver).
     Rigid point-set registration: find the least-squares Frame F such that
     F * a[i] ~= b[i] for every corresponding pair. Think about what happens
     with fewer than 3 points, with collinear points, and with a reflection. (same as a2)
@@ -86,7 +86,7 @@ def register_points(a: List[vct3], b: List[vct3]) -> Frame:
 
 def coarse_registration(d_by_patch: Dict[int, np.ndarray], boxes: List[PatchBox]) -> Frame:
     """
-    TODO: implement.
+    TODO(DONE): implement.
     Gives ICP a rough starting alignment between your measured tip points and the CT model
     
     input: {patch id: (n_i,3) tip points in reference coordinates}, the patch boxes
@@ -121,7 +121,7 @@ def coarse_registration(d_by_patch: Dict[int, np.ndarray], boxes: List[PatchBox]
 def icp(d: np.ndarray, mesh: Mesh, F_init: Frame, max_iter: int = 100, tol: float = 1e-4,
         reject: Optional[str] = "mad") -> IcpResult:
     """
-    TODO: implement.
+    TODO(DONE): implement.
     Refine a reference-to-CT frame using tip points d
     
     input: d (K,3) tip points in reference coordinates, mesh, initial F_reg,
