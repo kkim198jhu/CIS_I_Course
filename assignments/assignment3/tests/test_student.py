@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from pathlib import Path
-
+from scipy.stats import chi2
 from src import vct3, Rot, Frame, load_sur, load_patch_boxes
 
 MESH_FILE = Path(__file__).resolve().parents[1] / "data" / "ProximalFemurMeshFile.sur"
@@ -123,8 +123,45 @@ def test_report_round_trip(tmp_path):
 
 # ---------------------------------------------------------------- TODO: yours
 
-def test_registration_covariance_is_consistent():
-    pytest.skip("TODO: check that eta_true is within the predicted covariance (Mahalanobis ~ chi2_6)")
+def test_registration_covariance_is_consistent(mesh, surface_points):
+    """Check covariance scale using repeated noisy ICP fits."""
+    #Gets a known alignment and itializes variables
+    rng = np.random.default_rng(30)
+    F_true = random_frame(rng, angle=0.2, dist=20.0)
+    
+    n_trials = 30
+    scores = []
+    
+    for i in range(n_trials):
+        #Add measurements to known surface points
+        noise = rng.normal(scale=0.01, size=surface_points.shape)
+        noisy_points = surface_points + noise
+        #Turn it into reference-body coordinates
+        d = apply(F_true.inv(), noisy_points)
+        
+        #Get ICP results
+        result = icp.icp(d, mesh, F_true, max_iter=30, tol=1e-4, reject=None)
+        #ICP settled check
+        assert result.converged
+        
+        #Then get the covariance and check that it is a finite normalized error
+        mu, C_reg = uncertainty.registration_covariance(result, F_true)
+        score = float(mu @ np.linalg.solve(C_reg, mu))
+        
+        assert np.isfinite(score)
+        scores.append(score)
+    
+    #Check whether the overall uncertainty scale is reasonable
+    total = float(np.sum(scores))
+    degrees_of_freedom = 6 * n_trials
+    
+    lower = chi2.ppf(0.001, degrees_of_freedom)
+    upper = chi2.ppf(0.999, degrees_of_freedom)
+    
+    assert lower <= total <= upper, (
+        f"Normalized error sum {total:.2f} is outside "
+        f"the interval [{lower:.2f}, {upper:.2f}]"
+    )
 
 
 def test_patch_plan_keeps_bodies_visible():
