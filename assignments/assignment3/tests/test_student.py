@@ -14,7 +14,8 @@ from pathlib import Path
 from src import vct3, Rot, Frame, load_sur, load_patch_boxes
 
 MESH_FILE = Path(__file__).resolve().parents[1] / "data" / "ProximalFemurMeshFile.sur"
-from src.student import closest_point, icp, uncertainty, report
+from src.student import closest_point, icp, uncertainty, report, workflow
+from assignments.assignment1.src.tracker import Tracker
 
 
 def random_frame(rng, angle=1.0, dist=100.0):
@@ -127,4 +128,54 @@ def test_registration_covariance_is_consistent():
 
 
 def test_patch_plan_keeps_bodies_visible():
-    pytest.skip("TODO: check every planned patch keeps pointer and reference inside the frustum")
+    """Check planned patch-center poses in a fixed nominal scene."""
+    #Load the patches and create the designed camera
+    boxes_file = MESH_FILE.parent / "box-centroids-rotations-world.json"
+    boxes = load_patch_boxes(boxes_file)
+    design = workflow.design_scene()
+    tracker = Tracker("test_tracker", design.F_tracker_approx)
+    
+    #Create a plan from plan_patches
+    samples_per_patch = 4
+    plan = workflow.plan_patches(boxes, n_patches=len(boxes), samples_per_patch=samples_per_patch)
+    
+    #Check the length
+    assert len(plan) == len(boxes) * samples_per_patch
+    
+    #Check the marker body references
+    F_ref = Frame.eye()
+    ref_points = []
+    for marker in design.ref_marker_positions:
+        #Express it in workspace coordinates
+        ref_points.append(F_ref * marker)
+    
+    #Checks that they are visible
+    assert tracker.is_visible(ref_points), "Reference markers are not visible"
+    
+    #Build a dict of patch.id to boxes (hash map)
+    boxes_by_id = {}
+    for box in boxes:
+        boxes_by_id[box.id] = box
+    
+    #Goes through each patch id in plan
+    for patch_id in set(plan):
+        #Check to make sure that the ID actually exists and that the count of each is the same
+        assert patch_id in boxes_by_id, "Plan contains an unknown patch ID"
+        assert plan.count(patch_id) == samples_per_patch
+        
+        #Place a pointer at each patches center
+        #tip position = R_ptr * p_tip + p_ptr
+        #Assume tip position = patch center
+        #p_ptr = patch center - R_ptr * p_tip
+        box = boxes_by_id[patch_id]
+        R_ptr = box.F_box.R
+        p_ptr = box.F_box.p - R_ptr * design.p_tip
+        #Make a frame
+        F_ptr = Frame(R_ptr, p_ptr)
+        
+        #Check the pointer’s markers at that pose
+        ptr_points = []
+        for marker in design.ptr_marker_positions:
+            ptr_points.append(F_ptr * marker)
+        
+        assert tracker.is_visible(ptr_points), (f"Pointer markers are not visible at patch {patch_id}")
