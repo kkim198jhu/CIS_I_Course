@@ -103,6 +103,7 @@ def coarse_registration(d_by_patch: Dict[int, np.ndarray], boxes: List[PatchBox]
     
     #Go through the sample patches
     for patch_id, tip_points in d_by_patch.items():
+
         #If it isn't valid, then skip
         if len(tip_points) == 0:
             continue
@@ -156,8 +157,13 @@ def icp(d: np.ndarray, mesh: Mesh, F_init: Frame, max_iter: int = 100, tol: floa
         if reject == "mad":
             median = np.median(residuals)
             mad = np.median(np.abs(residuals - median))
-            cutoff = median + 3.5 * max((1/0.6745) * mad, tol)
-            #Removes all them that is outside the mean
+            #std estimate from max
+            std_from_mad = (1/0.6745) * mad
+            #99.7% likelyhood that the true point is within 3 standard deviations of the (mean really) median, so we use that as a cutoff
+            #lower bound to tolerance in case of very small std_from_mad -> means all the points are good
+            #so we can take fewer points and compute a good match.
+            cutoff = median + 3 * max(std_from_mad, tol)
+            #Removes all them that is outside the median absolute deviation cutoffs
             imask = residuals <= cutoff
         
         #If there isn't enough inliers then we reject

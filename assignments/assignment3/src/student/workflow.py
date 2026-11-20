@@ -35,11 +35,12 @@ def design_scene() -> SceneDesign:
     TODO(DONE): implement -- return the same values the notebook's Step 1 cell uses
     (grading calls this instead of the notebook).
     """
-    F_tracker_approx = Frame(Rot(), vct3(0, 0, -1500))
-    p_tip = vct3(0, 0, -150)
-    ref_marker_positions = [vct3(-40, -30, 0), vct3(40, -30, 0), vct3(0, 40, 0), vct3(10, 0, 25)]
+    F_tracker_approx = Frame(Rot(axis='x', angle=np.pi), vct3(0, 0, 1600))     # TODO: Frame, camera pose relative to the workspace (looks along its local +z)  
+    ref_marker_positions = [vct3(1, 1, 28), vct3(26, -2, 2), vct3(-27, 1, 2), vct3(0, 29, -1), vct3(0, 2, -28), vct3(-1.5, -27, -1.5)]    # TODO: >= 3 points, reference-body coordinates
 
-    ptr_marker_positions = [vct3(-30, -20, 0), vct3(30, -20, 0), vct3(0, 30, 0), vct3(10, 5, 20)]
+    ptr_marker_positions = [vct3(1, 1, 78), vct3(38, -2, 42), vct3(0, 39, 39), vct3(-37, 1, 42), vct3(0, 2, 2), vct3(-1.5, -37, 38.5)]    # TODO: >= 3 points, pointer coordinates
+
+    p_tip = vct3(0, 0, -120)  
     
     return SceneDesign(F_tracker_approx, ref_marker_positions, ptr_marker_positions, p_tip)
 
@@ -57,11 +58,13 @@ def plan_patches(boxes: List[PatchBox], n_patches: int, samples_per_patch: int) 
         raise ValueError("n_patches must be between 1 and the number of boxes")
     if samples_per_patch < 1:
         raise ValueError("samples_per_patch must be positive")
-    
-    plan = []
-    for box in boxes[:n_patches]:
-        for i in range(samples_per_patch):
-            plan.append(box.id)
+
+    rng = np.random.default_rng(0)  # Fixed seed for reproducibility
+    #choose random boxes to sample from the list of boxes without replacement
+    box_indices = rng.choice(len(boxes), size=n_patches, replace=False)
+
+    #Create a list of patch ids to visit, repeating same index if multiple samples per patch
+    plan = [box_indices[i] for i in range(n_patches) for _ in range(samples_per_patch)]
     
     return plan
 
@@ -96,7 +99,7 @@ def collect_samples(session: Session, plan: List[int]) -> SampleSet:
             print(f"Skipped sample {handle.sample_index} on patch {patch_id}: a body was not visible")
             continue
         
-        #Express tip's position in reference fra e
+        #Express tip's position in reference frame
         F_ref = ref_obs.frame
         F_ptr = ptr_obs.frame
         
