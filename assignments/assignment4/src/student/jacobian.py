@@ -21,7 +21,6 @@ Hints:
 * Convert the robot-coordinate motions to body coordinates with R_RW^T.
 * Check your answer numerically: tools.pose_error_body(F(q), F(q + h e_k)) / h
   should match column k for small h (tests/test_student.py does exactly this).
-
 You may ask an AI system to help write these, provided you cite the prompt you
 used and check the result (handout).
 """
@@ -29,14 +28,54 @@ used and check the result (handout).
 import numpy as np
 
 from src.tools.frames import skew, frame_Rp
+from data_types.nominal_types import Rot
+
 
 
 def jacobian_RW(q) -> np.ndarray:
     """
+    Compute the wrist body Jacobian for the current joint configuration.
+    
     input:  q -- 6 joint values (mm, mm, mm, rad, rad, rad)
     output: 6x6 body Jacobian of F_RW(q), rows [alpha; epsilon]
+            Rows 0 - 2 describe rotation in radians
+            Rows 3 - 5 describe translation in millimeters
+            Each column corresponds to one joint
     """
-    raise NotImplementedError("TODO: jacobian_RW")
+    #Gets it with 6 values
+    q = np.asarray(q, dtype=float).reshape(6)
+    
+    #Gets the rotation matrices
+    Rx = Rot('x', q[3]).matrix
+    Ry = Rot('y', q[4]).matrix
+    Rz = Rot('z', q[5]).matrix
+    
+    #Gets the rotation matrix
+    R = Rx @ Ry @ Rz
+    
+    #Note that the the 5th's axis is affect by the 4th and the 6th is affect by the 5th and the 4th
+    axes = [np.array([1.0, 0.0, 0.0]), Rx @ np.array([0.0, 1.0, 0.0]), Rx @ Ry @ np.array([0.0, 0.0, 1.0])]
+    
+    #From assignment 100 meters away from the rotated x direction = lever arm (look above in the file docstring)
+    lever_arm = R @ np.array([100.0, 0.0, 0.0])
+    
+    #Intialize it
+    J = np.zeros((6, 6))
+    
+    #Put the translation value on the 1st, 2nd, and 3rd joint
+    J[3:, :3] = R.T
+    
+    #Put the rotation value on the 4th, 5th, and 6th value
+    for j in range(3):
+        axis = axes[j]
+        #Gets current joint’s rotation axis, which it expresses it in robot coords
+        J[:3, j + 3] = R.T @ axis
+        
+        #How does the rot. changes the position of the wrist origin
+        linear_motion = np.cross(axis, lever_arm)
+        J[3:, j + 3] = R.T @ linear_motion
+    
+    return J
 
 
 def jacobian_RT(q, F_WT) -> np.ndarray:
