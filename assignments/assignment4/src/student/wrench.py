@@ -19,11 +19,31 @@ from src.tools.frames import skew, frame_Rp
 
 def resolve_wrench_to_tool(zeta_W, F_WT) -> np.ndarray:
     """
+    Resolve a wrist wrench at the tool tip
+    Note: torque_about_wrist = torque_about_tip + offset x force
+    
     input:  zeta_W -- [tau_W, phi_W] measured at and expressed in W
             F_WT   -- pose of the tool frame T relative to W
     output: zeta_T -- [tau_T, phi_T], the equivalent wrench at the origin of T, in T coordinates
     """
-    raise NotImplementedError("TODO: resolve_wrench_to_tool")
+    
+    zeta_W = np.asarray(zeta_W, dtype=float).reshape(6)
+    
+    #Get torque and force
+    tau_W = zeta_W[:3]
+    phi_W = zeta_W[3:]
+    
+    #Get the rotation and translation
+    R_WT, p_WT = frame_Rp(F_WT)
+    
+    #Force in tool coordinates
+    phi_T = R_WT.T @ phi_W
+    
+    #Set it to the tool tip instead of the wrist
+    torque_from_offset = np.cross(p_WT, phi_W)
+    tau_T = R_WT.T @ (tau_W - torque_from_offset)
+    
+    return np.concatenate((tau_T, phi_T))
 
 
 def wrench_in_robot_frame(zeta_T, R_RT) -> np.ndarray:
