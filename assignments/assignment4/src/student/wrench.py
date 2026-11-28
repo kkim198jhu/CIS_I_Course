@@ -48,8 +48,24 @@ def resolve_wrench_to_tool(zeta_W, F_WT) -> np.ndarray:
 
 def wrench_in_robot_frame(zeta_T, R_RT) -> np.ndarray:
     """
+    Express a tool-tip wrench in robot coordinates
+    
     input:  zeta_T -- a wrench expressed in tool coordinates; R_RT -- tool orientation (3x3)
     output: zeta_RT -- the same wrench expressed in robot coordinates
     (The handout writes R_RW here; with F_WT = [I, p] that is the same matrix.)
     """
-    raise NotImplementedError("TODO: wrench_in_robot_frame")
+    
+    #
+    zeta_T = np.asarray(zeta_T, dtype=float).reshape(6)
+    R_RT = np.asarray(R_RT, dtype=float).reshape(3, 3)
+    
+    #Separate torque and force
+    tau_T = zeta_T[:3]
+    phi_T = zeta_T[3:]
+    
+    #Rotate both vectors into robot coordinates
+    tau_R = R_RT @ tau_T
+    phi_R = R_RT @ phi_T
+    
+    #Join them together
+    return np.concatenate((tau_R, phi_R))
