@@ -80,9 +80,32 @@ def jacobian_RW(q) -> np.ndarray:
 
 def jacobian_RT(q, F_WT) -> np.ndarray:
     """
+    Compute the tool-tip body Jacobian.
+    
     input:  q -- joint values; F_WT -- tool tip relative to the wrist (Frame)
     output: 6x6 body Jacobian of F_RT(q) = F_RW(q) F_WT, rows [alpha_T; epsilon_T]
-
+    
     Hint: dF_T = F_WT^-1 dF_W F_WT. Work out what that does to alpha and epsilon.
     """
-    raise NotImplementedError("TODO: jacobian_RT")
+    #Reuses J_RW from the function above
+    J_RW = jacobian_RW(q)
+    
+    #Gets the tool's orientation in relation to the wrist
+    R_WT, p_WT = frame_Rp(F_WT)
+    
+    #Intialize dat things
+    J_RT = np.zeros((6, 6))
+    
+    #Process all 6 joints
+    for k in range(6):
+        angular_W = J_RW[:3, k]
+        linear_W = J_RW[3:, k]
+        
+        #Calculates the change in position caused by by wrist rotation at the tool's tip
+        offset_motion = np.cross(angular_W, p_WT)
+        
+        #Gets it in tool coordinates
+        J_RT[:3, k] = R_WT.T @ angular_W
+        J_RT[3:, k] = R_WT.T @ (linear_W + offset_motion)
+    
+    return J_RT
